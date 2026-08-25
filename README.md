@@ -16,12 +16,14 @@ vendor-specific exists outside an adapter or a config file. **GTFS is the
 canonical internal model** — every upstream adapter normalises into it, every
 output serialises out of it.
 
-## The full brief
+## The docs
 
-The complete engineering brief — tenancy model, roles & security, driver-app
-behaviour, adapter architecture, data model, phase plan and non-negotiables —
-lives in [`docs/BUILD_PROMPT.md`](docs/BUILD_PROMPT.md). Read it first; it is
-the source of truth for this repository.
+- [`docs/BUILD_PROMPT.md`](docs/BUILD_PROMPT.md) — the complete engineering
+  brief: tenancy, roles & security, driver-app behaviour, adapters, data
+  model, non-negotiables. **The source of truth — read it first.**
+- [`docs/PHASE_PLAN.md`](docs/PHASE_PLAN.md) — the detailed execution plan:
+  all 13 phases broken into tasks, deliverables, gates, dependencies, risks
+  and milestones.
 
 ## Stack
 
@@ -43,7 +45,7 @@ services/api/  Go backend: adapters, ingest, gtfs, httpapi, store, tracking, dis
 contracts/   openapi.yaml — single source of truth for the REST API
 infra/       supabase migrations & RLS policies
 deploy/      compose · helm · terraform
-docs/        adr · onboarding · BUILD_PROMPT.md
+docs/        adr · onboarding · BUILD_PROMPT.md · PHASE_PLAN.md
 ```
 
 ## Quick start
@@ -57,10 +59,10 @@ make lint
 
 ## Contributing
 
-Work follows the phase plan in §11 of the build brief. Hard rules (§0) apply to
-every PR — in particular: no agency-specific hardcoding, roles never read from
-`user_metadata`, stop events recomputed server-side, and raw driver pings never
-exposed publicly.
+Work follows the phase plan in [`docs/PHASE_PLAN.md`](docs/PHASE_PLAN.md).
+Hard rules (build brief §0) apply to every PR — in particular: no
+agency-specific hardcoding, roles never read from `user_metadata`, stop events
+recomputed server-side, and raw driver pings never exposed publicly.
 
 ## License
 
