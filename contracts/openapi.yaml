@@ -1,0 +1,48 @@
+openapi: 3.0.3
+info:
+  title: Transit API
+  description: >-
+    Single source of truth for the Transit REST API. Go server types
+    (oapi-codegen) and the Dart client (packages/transit_api_client) are
+    generated from this file — never hand-write a model on one side only.
+  version: 0.1.0
+  license:
+    name: MIT
+servers:
+  - url: http://localhost:8080
+    description: Local development
+paths:
+  /healthz:
+    get:
+      operationId: healthz
+      summary: Liveness probe
+      responses:
+        "200":
+          description: Service is alive
+  /readyz:
+    get:
+      operationId: readyz
+      summary: Readiness probe
+      responses:
+        "200":
+          description: Service is ready
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: ready
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: Supabase JWT with agency-scoped role claims (apps & admin).
+    apiKey:
+      type: apiKey
+      in: header
+      name: X-API-Key
+      description: Portal-issued data-consumer key, token-bucket rate limited.
