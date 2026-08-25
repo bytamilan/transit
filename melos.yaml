@@ -1,0 +1,15 @@
+name: transit
+repository: https://github.com/bytamilan/transit
+
+packages:
+  - apps/driver_app
+  - apps/rider_app
+  - packages/**
+
+scripts:
+  lint:
+    run: dart analyze .
+    description: Analyze all Dart packages.
+  test:
+    run: dart test .
+    description: Run all Dart tests.
