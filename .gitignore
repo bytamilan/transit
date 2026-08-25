@@ -1,0 +1,33 @@
+# ---- Go ----
+*.exe
+*.dll
+*.so
+*.dylib
+*.test
+*.out
+/services/api/bin/
+
+# ---- Dart / Flutter ----
+.dart_tool/
+.packages
+build/
+.flutter-plugins
+.flutter-plugins-dependencies
+**/pubspec.lock
+
+# ---- Node / Next.js ----
+node_modules/
+.next/
+out/
+*.tsbuildinfo
+
+# ---- Env / secrets (never commit real values) ----
+.env
+.env.*
+!.env.example
+
+# ---- OS / editor ----
+.DS_Store
+.idea/
+.vscode/
+*.swp
