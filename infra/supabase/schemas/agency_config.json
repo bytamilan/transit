@@ -1,0 +1,154 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://github.com/bytamilan/transit/schemas/agency_config.json",
+  "title": "Agency Configuration",
+  "description": "Agency-scoped runtime configuration for a Transit deployment. Nothing agency-specific is hardcoded in code; this schema is the contract.",
+  "type": "object",
+  "required": [
+    "name",
+    "timezone",
+    "locales",
+    "currency",
+    "distance_unit",
+    "modes",
+    "map_provider",
+    "license",
+    "branding",
+    "driver_ops"
+  ],
+  "properties": {
+    "name": {
+      "type": "object",
+      "minProperties": 1,
+      "patternProperties": {
+        "^[a-zA-Z0-9_-]+$": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "additionalProperties": false
+    },
+    "timezone": {
+      "type": "string",
+      "description": "IANA timezone used for all schedule arithmetic."
+    },
+    "locales": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "string",
+        "pattern": "^[a-z]{2}(-[A-Z]{2})?$"
+      }
+    },
+    "currency": {
+      "type": "string",
+      "pattern": "^[A-Z]{3}$",
+      "description": "ISO 4217 currency code."
+    },
+    "distance_unit": {
+      "type": "string",
+      "enum": ["metric", "imperial"]
+    },
+    "modes": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "string",
+        "enum": [
+          "bus",
+          "rail",
+          "ferry",
+          "tram",
+          "paratransit",
+          "metro",
+          "subway",
+          "trolleybus",
+          "cable_car",
+          "gondola",
+          "funicular",
+          "taxi"
+        ]
+      }
+    },
+    "map_provider": {
+      "type": "string",
+      "enum": ["google", "maplibre", "protomaps"]
+    },
+    "license": {
+      "type": "object",
+      "required": ["spdx", "attribution"],
+      "properties": {
+        "spdx": {
+          "type": "string"
+        },
+        "attribution": {
+          "type": "string"
+        },
+        "terms_url": {
+          "type": "string",
+          "format": "uri"
+        }
+      },
+      "additionalProperties": false
+    },
+    "branding": {
+      "type": "object",
+      "required": ["primary"],
+      "properties": {
+        "primary": {
+          "type": "string"
+        },
+        "secondary": {
+          "type": "string"
+        },
+        "logo_url": {
+          "type": "string",
+          "format": "uri"
+        },
+        "font": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
+    },
+    "driver_ops": {
+      "type": "object",
+      "required": [
+        "stop_geofence_m",
+        "ping_interval_moving_s",
+        "ping_interval_idle_s",
+        "auto_start_trip",
+        "lock_ui_above_kmh"
+      ],
+      "properties": {
+        "stop_geofence_m": {
+          "type": "number",
+          "minimum": 1
+        },
+        "ping_interval_moving_s": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "ping_interval_idle_s": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "auto_start_trip": {
+          "type": "boolean"
+        },
+        "lock_ui_above_kmh": {
+          "type": "number",
+          "minimum": 0
+        }
+      },
+      "additionalProperties": false
+    },
+    "feeds": {
+      "type": "array",
+      "items": {
+        "type": "object"
+      }
+    }
+  },
+  "additionalProperties": false
+}

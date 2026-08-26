@@ -6,6 +6,7 @@
 *.test
 *.out
 /services/api/bin/
+/services/api/server
 
 # ---- Dart / Flutter ----
 .dart_tool/
@@ -31,3 +32,4 @@ out/
 .idea/
 .vscode/
 *.swp
+docs/adr/*.md

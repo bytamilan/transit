@@ -21,12 +21,113 @@ services:
       context: ../../services/api
     environment:
       API_ADDR: ":8080"
-      DATABASE_URL: postgres://postgres:${POSTGRES_PASSWORD:-postgres}@db:5432/${POSTGRES_DB:-postgres}?sslmode=disable
+      DATABASE_URL: postgres://postgres:${POSTGRES_PASSWORD:-postgres}@db:5432/${POSTGRES_DB:-postgres}?sslmode=disable&search_path=transit,public,extensions,auth
     ports:
       - "8080:8080"
     depends_on:
       db:
         condition: service_healthy
+
+  # Supabase Auth (GoTrue) — the JWT issuer used by the Flutter apps and portal.
+  # Wired to the same Postgres instance; a full custom-claims hook lands in Phase 2.
+  auth:
+    profiles: ["supabase"]
+    image: supabase/gotrue:v2.167.0
+    environment:
+      GOTRUE_API_HOST: 0.0.0.0
+      GOTRUE_API_PORT: "9999"
+      API_EXTERNAL_URL: ${API_EXTERNAL_URL:-http://localhost:8000/auth}
+      GOTRUE_DB_DRIVER: postgres
+      GOTRUE_DB_DATABASE_URL: postgres://supabase_auth_admin:${POSTGRES_PASSWORD:-postgres}@db:5432/${POSTGRES_DB:-postgres}?sslmode=disable
+      GOTRUE_SITE_URL: ${SITE_URL:-http://localhost:3000}
+      GOTRUE_URI_ALLOW_LIST: ${ADDITIONAL_REDIRECT_URLS:-*}
+      GOTRUE_DISABLE_SIGNUP: "false"
+      GOTRUE_EXTERNAL_EMAIL_ENABLED: "false"
+      GOTRUE_EXTERNAL_PHONE_ENABLED: "false"
+      GOTRUE_MAILER_AUTOCONFIRM: "true"
+      GOTRUE_JWT_ADMIN_ROLES: service_role
+      GOTRUE_JWT_AUD: authenticated
+      GOTRUE_JWT_DEFAULT_GROUP_NAME: authenticated
+      GOTRUE_JWT_EXP: ${JWT_EXPIRY:-3600}
+      GOTRUE_JWT_SECRET: ${JWT_SECRET:-change-me-in-production}
+      GOTRUE_JWT_ISSUER: ${API_EXTERNAL_URL:-http://localhost:8000/auth}
+    ports:
+      - "9999:9999"
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:9999/health || exit 1"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+      start_period: 10s
+
+  # PostgREST — direct REST/SQL over the Postgres schema. Disabled until the
+  # anon/authenticated roles and full RLS matrix are set up in Phase 2.
+  rest:
+    profiles: ["supabase"]
+    image: postgrest/postgrest:v12.2.3
+    environment:
+      PGRST_DB_URI: postgres://authenticator:${POSTGRES_PASSWORD:-postgres}@db:5432/${POSTGRES_DB:-postgres}?sslmode=disable&search_path=transit,public,extensions,auth
+      PGRST_DB_SCHEMAS: transit
+      PGRST_DB_MAX_ROWS: "1000"
+      PGRST_DB_EXTRA_SEARCH_PATH: transit,public,extensions
+      PGRST_DB_ANON_ROLE: anon
+      PGRST_DB_USE_LEGACY_GUCS: "false"
+      PGRST_JWT_SECRET: ${JWT_SECRET:-change-me-in-production}
+      PGRST_APP_SETTINGS_JWT_SECRET: ${JWT_SECRET:-change-me-in-production}
+      PGRST_APP_SETTINGS_JWT_EXP: ${JWT_EXPIRY:-3600}
+      PGRST_ADMIN_SERVER_PORT: "3001"
+      PGRST_ADMIN_SERVER_HOST: localhost
+    ports:
+      - "3000:3000"
+      - "3001:3001"
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:3000/ || exit 1"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+      start_period: 10s
+
+  # Supabase Realtime — listens to Postgres changes for the dispatch board.
+  # Healthcheck only in Phase 1; no active consumers yet.
+  realtime:
+    profiles: ["supabase"]
+    image: supabase/realtime:v2.34.2
+    environment:
+      PORT: "4000"
+      DB_HOST: db
+      DB_PORT: "5432"
+      DB_USER: supabase_admin
+      DB_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      DB_NAME: ${POSTGRES_DB:-postgres}
+      DB_SSL: "false"
+      DB_AFTER_CONNECT_QUERY: 'SET search_path TO _realtime'
+      API_JWT_SECRET: ${JWT_SECRET:-change-me-in-production}
+      SECRET_KEY_BASE: ${SECRET_KEY_BASE:-change-me-in-production-must-be-at-least-64-characters-long}
+      METRICS_JWT_SECRET: ${JWT_SECRET:-change-me-in-production}
+      ERL_AFLAGS: -proto_dist inet_tcp
+      DNS_NODES: "''"
+      RLIMIT_NOFILE: "10000"
+      APP_NAME: realtime
+      SEED_SELF_HOST: "true"
+      RUN_JANITOR: "true"
+      DISABLE_HEALTHCHECK_LOGGING: "true"
+    ports:
+      - "4000:4000"
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:4000/ || exit 1"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+      start_period: 10s
 
 volumes:
   db_data:
