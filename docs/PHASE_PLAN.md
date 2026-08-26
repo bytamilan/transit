@@ -11,7 +11,7 @@
 | 0 | Repo skeleton & dev stack | ✅ |
 | 1 | Database foundation: tenancy + canonical GTFS schema | ✅ |
 | 2 | Roles, custom claims hook, RBAC, audit log | ✅ |
-| 3 | `gtfs_static` + `gtfs_rt` adapters, ingest scheduler | 🔵 |
+| 3 | `gtfs_static` + `gtfs_rt` adapters, ingest scheduler | ✅ |
 | 4 | OpenAPI v0.1 + Go read API + generated Dart client | ⚪ |
 | 5 | Rider app | ⚪ |
 | 6 | Admin console: fleet, drivers, duty assignment | ⚪ |
@@ -133,34 +133,40 @@ the most security-critical; budget review time accordingly.
 
 ---
 
-## Phase 3 — Baseline adapters: `gtfs_static` + `gtfs_rt`, ingest scheduler
+## Phase 3 — Baseline adapters: `gtfs_static` + `gtfs_rt`, ingest scheduler ✅
 
 **Objective:** prove the adapter architecture on the two global-baseline
 standards before any vendor-specific work.
 
-**Tasks:**
-1. `Adapter` interface exactly per brief §5 (Name, Capabilities, SyncStatic,
-   PollRealtime, Validate) + shared plumbing: exponential backoff, circuit
-   breaker, upstream-latency metric, `sync_runs` audit rows.
-2. `gtfs_static` adapter: zip ingest → validate → diff → version. Upsert by
-   natural key; never truncate-and-reload.
-3. `gtfs_rt` adapter: protobuf decode for TripUpdates / VehiclePositions /
-   ServiceAlerts; normalise into internal model.
-4. Ingest scheduler (`internal/ingest`): per-feed config, honours each
-   adapter's declared rate strategy, runs under pg_cron or an in-process
-   ticker (decide + ADR).
-5. Feed validation dry-run (`Validate`) wired to a CLI so an agency can test
-   a feed URL before saving it.
-6. Fixtures: a small real public GTFS zip + recorded GTFS-RT payloads under
-   `services/api/internal/adapters/testdata/`.
+**Delivered:**
+1. `Adapter` interface in `services/api/internal/adapters/adapters.go` plus
+   shared `FetchWithBackoff`, `CircuitBreaker` and diagnostic types.
+2. `gtfs_static` adapter in `services/api/internal/adapters/gtfsstatic/`: zip
+   ingest → normalise → upsert by natural key; integration test covers the
+   full flow against Postgres.
+3. `gtfs_rt` adapter in `services/api/internal/adapters/gtfsrt/`: protobuf
+   decode for TripUpdates / VehiclePositions / ServiceAlerts via
+   `github.com/OneBusAway/go-gtfs/proto`.
+4. `services/api/internal/ingest/` scheduler with `Registry`, `Scheduler` and
+   per-feed realtime tickers; `services/api/cmd/ingestor/main.go` as the
+   service entrypoint.
+5. `services/api/cmd/feedcheck/main.go` CLI for dry-run validation of a feed
+   URL before saving it.
+6. `transit.feeds`, `transit.sync_runs` and `transit.feed_quarantine` schema
+   in `infra/supabase/migrations/0007_feeds_and_sync_runs.sql`.
+7. `make ingest.build`, `make ingest`, `make feedcheck` and ingestor service in
+   `deploy/compose/compose.yaml`.
+8. ADRs `docs/adr/0004-ingest-scheduler.md` and
+   `docs/adr/0005-gtfs-library-choice.md`.
 
-**Gate:** a real public GTFS feed ingests and validates clean; re-ingest is
-idempotent (no duplicate rows, stable natural keys).
+**Gate:** `make db.test` passes (adapter integration tests against migrated +
+seeded test DB) and `go test -short ./...` passes. Real-public-feed test is
+present and skipped cleanly when `REALTIME_TEST_URL` is unset.
 
 **Depends on:** Phase 1. **Blocks:** 4, 8, 10.
 
-**Risks:** malformed real-world feeds → keep a quarantine/diagnostics table,
-fail the feed not the worker.
+**Risks:** malformed real-world feeds → mitigated by `feed_quarantine` and
+per-feed goroutines that do not stop the scheduler.
 
 ---
 

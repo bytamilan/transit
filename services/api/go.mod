@@ -3,10 +3,12 @@ module github.com/bytamilan/transit/services/api
 go 1.26.0
 
 require (
+	github.com/OneBusAway/go-gtfs v1.1.1
 	github.com/google/uuid v1.6.0
 	github.com/jackc/pgx/v5 v5.10.0
 	github.com/lestrrat-go/jwx/v2 v2.1.7
 	golang.org/x/crypto v0.55.0
+	google.golang.org/protobuf v1.27.1
 )
 
 require (

@@ -25,7 +25,7 @@ DB_URL_DOCKER ?= postgres://postgres:$(POSTGRES_PASSWORD)@host.docker.internal:5
 PSQL := docker run --rm -e PGPASSWORD=$(POSTGRES_PASSWORD) -v "$(PWD)/infra/supabase:/infra/supabase" $(TEST_DB_IMAGE) psql
 TEST_PSQL := docker exec -e PGPASSWORD=$(TEST_DB_PASSWORD) transit-test-db psql
 
-.PHONY: help dev down logs lint test gen db.migrate db.seed db.test
+.PHONY: help dev down logs lint test gen ingest.build ingest feedcheck db.migrate db.seed db.test
 
 help: ## Show this help
 	@grep -E '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-10s\033[0m %s\n", $$1, $$2}'
@@ -56,6 +56,20 @@ test: ## Run Go unit tests (no database required)
 
 gen: ## Regenerate server & client types from contracts/openapi.yaml
 	@echo "TODO(phase 4): oapi-codegen (Go) + openapi-generator (Dart) from contracts/openapi.yaml"
+
+ingest.build: ## Build the ingestor and feedcheck binaries
+	cd services/api && go build -o bin/ingestor ./cmd/ingestor
+	cd services/api && go build -o bin/feedcheck ./cmd/feedcheck
+
+ingest: ingest.build ## Run the ingestor once with DATABASE_URL
+	cd services/api && DATABASE_URL="$(DB_URL)" ./bin/ingestor
+
+feedcheck: ingest.build ## Validate a single feed: make feedcheck adapter=gtfs_static url=...
+	@if [ -z "$(adapter)" ] || [ -z "$(url)" ]; then \
+		echo "Usage: make feedcheck adapter=gtfs_static url=..."; \
+		exit 1; \
+	fi
+	cd services/api && ./bin/feedcheck -adapter $(adapter) -url $(url)
 
 db.build: ## Build the migration runner binary
 	cd services/api && go build -o bin/migrate ./cmd/migrate
@@ -89,6 +103,6 @@ db.test: db.build ## Start a test PostGIS container, migrate, seed, run integrat
 	done
 	cd services/api && DATABASE_URL="$(MIGRATE_TEST_DB_URL)" MIGRATIONS_DIR="$(MIGRATIONS_DIR)" ./bin/migrate up
 	$(TEST_PSQL) "postgres://postgres:$(TEST_DB_PASSWORD)@localhost/postgres?sslmode=disable" -f "/infra/supabase/seed/demo_agencies.sql"
-	cd services/api && DATABASE_URL="$(TEST_DB_URL)" go test -tags integration ./internal/store/...
+	cd services/api && DATABASE_URL="$(TEST_DB_URL)" go test -tags integration ./internal/store/... ./internal/adapters/...
 	@docker stop transit-test-db > /dev/null
 	@echo "Test database stopped."
