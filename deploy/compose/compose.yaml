@@ -22,6 +22,9 @@ services:
     environment:
       API_ADDR: ":8080"
       DATABASE_URL: postgres://postgres:${POSTGRES_PASSWORD:-postgres}@db:5432/${POSTGRES_DB:-postgres}?sslmode=disable&search_path=transit,public,extensions,auth
+      JWT_SECRET: ${JWT_SECRET:-change-me-in-production}
+      API_EXTERNAL_URL: ${API_EXTERNAL_URL:-http://localhost:8000/auth}
+      GOTRUE_JWT_AUD: authenticated
     ports:
       - "8080:8080"
     depends_on:
@@ -51,6 +54,8 @@ services:
       GOTRUE_JWT_EXP: ${JWT_EXPIRY:-3600}
       GOTRUE_JWT_SECRET: ${JWT_SECRET:-change-me-in-production}
       GOTRUE_JWT_ISSUER: ${API_EXTERNAL_URL:-http://localhost:8000/auth}
+      GOTRUE_HOOK_CUSTOM_ACCESS_TOKEN_ENABLED: "true"
+      GOTRUE_HOOK_CUSTOM_ACCESS_TOKEN_URI: pg-functions://postgres/transit/custom_access_token_hook
     ports:
       - "9999:9999"
     depends_on:
