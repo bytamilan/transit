@@ -10,8 +10,8 @@
 |---|---|---|
 | 0 | Repo skeleton & dev stack | ✅ |
 | 1 | Database foundation: tenancy + canonical GTFS schema | ✅ |
-| 2 | Roles, custom claims hook, RBAC, audit log | 🔵 |
-| 3 | `gtfs_static` + `gtfs_rt` adapters, ingest scheduler | ⚪ |
+| 2 | Roles, custom claims hook, RBAC, audit log | ✅ |
+| 3 | `gtfs_static` + `gtfs_rt` adapters, ingest scheduler | 🔵 |
 | 4 | OpenAPI v0.1 + Go read API + generated Dart client | ⚪ |
 | 5 | Rider app | ⚪ |
 | 6 | Admin console: fleet, drivers, duty assignment | ⚪ |
