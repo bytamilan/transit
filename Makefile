@@ -4,6 +4,7 @@ export
 .DEFAULT_GOAL := help
 
 COMPOSE := docker compose -f deploy/compose/compose.yaml --env-file .env
+OAPI_CODEGEN ?= $(shell go env GOPATH)/bin/oapi-codegen
 
 POSTGRES_PASSWORD ?= postgres
 POSTGRES_DB ?= postgres
@@ -55,7 +56,16 @@ test: ## Run Go unit tests (no database required)
 	cd services/api && go test -short ./...
 
 gen: ## Regenerate server & client types from contracts/openapi.yaml
-	@echo "TODO(phase 4): oapi-codegen (Go) + openapi-generator (Dart) from contracts/openapi.yaml"
+	cd services/api && $(OAPI_CODEGEN) --config oapi-codegen.yaml ../../contracts/openapi.yaml
+	docker run --rm -v "$(PWD)/contracts/openapi.yaml:/openapi.yaml" \
+		-v "$(PWD)/packages/transit_api_client:/out" \
+		openapitools/openapi-generator-cli generate \
+		-i /openapi.yaml -g dart-dio -o /out \
+		--additional-properties=pubName=transit_api_client,pubAuthor="Transit",pubAuthorEmail=dev@example.com
+
+gen-check: gen ## Regenerate code and fail if the working tree has drift
+	git diff --exit-code contracts/openapi.yaml services/api/internal/generated packages/transit_api_client || \
+		(echo "Generated code drift detected. Run 'make gen' and commit the changes."; exit 1)
 
 ingest.build: ## Build the ingestor and feedcheck binaries
 	cd services/api && go build -o bin/ingestor ./cmd/ingestor
@@ -103,6 +113,6 @@ db.test: db.build ## Start a test PostGIS container, migrate, seed, run integrat
 	done
 	cd services/api && DATABASE_URL="$(MIGRATE_TEST_DB_URL)" MIGRATIONS_DIR="$(MIGRATIONS_DIR)" ./bin/migrate up
 	$(TEST_PSQL) "postgres://postgres:$(TEST_DB_PASSWORD)@localhost/postgres?sslmode=disable" -f "/infra/supabase/seed/demo_agencies.sql"
-	cd services/api && DATABASE_URL="$(TEST_DB_URL)" go test -tags integration ./internal/store/... ./internal/adapters/...
+	cd services/api && DATABASE_URL="$(TEST_DB_URL)" go test -tags integration ./internal/store/... ./internal/adapters/... ./internal/httpapi/...
 	@docker stop transit-test-db > /dev/null
 	@echo "Test database stopped."

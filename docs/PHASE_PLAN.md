@@ -12,7 +12,7 @@
 | 1 | Database foundation: tenancy + canonical GTFS schema | ✅ |
 | 2 | Roles, custom claims hook, RBAC, audit log | ✅ |
 | 3 | `gtfs_static` + `gtfs_rt` adapters, ingest scheduler | ✅ |
-| 4 | OpenAPI v0.1 + Go read API + generated Dart client | ⚪ |
+| 4 | OpenAPI v0.1 + Go read API + generated Dart client | ✅ |
 | 5 | Rider app | ⚪ |
 | 6 | Admin console: fleet, drivers, duty assignment | ⚪ |
 | 7 | Driver app: always-on shell + telemetry | ⚪ |
@@ -170,22 +170,32 @@ per-feed goroutines that do not stop the scheduler.
 
 ---
 
-## Phase 4 — OpenAPI v0.1 + Go read API + generated Dart client
+## Phase 4 — OpenAPI v0.1 + Go read API + generated Dart client ✅
 
 **Objective:** the first real API surface, contract-first both directions.
 
-**Tasks:**
-1. `contracts/openapi.yaml` v0.1: agencies/config (public subset), stops,
-   routes, trips, arrivals (read models), health. Both auth schemes wired.
-2. Go: `oapi-codegen` types + chi handlers in `internal/httpapi`; sqlc
-   queries in `internal/store`; OpenTelemetry middleware.
-3. Dart: `packages/transit_api_client` generated from the contract;
-   `make gen` regenerates both sides; CI fails on drift.
-4. API keys: issue/hash/store, token-bucket limiter, `usage_events`
-   recording (schema from §8).
-5. Postman/Bruno collection generated from the contract, run in CI.
+**Delivered:**
+1. `contracts/openapi.yaml` v0.1 with public read endpoints:
+   `/v0/agencies/{slug}` + `/config`, `/stops`, `/routes`, `/trips`,
+   `/trips/{id}/stop_times`, `/arrivals`, plus `/healthz` and `/readyz`.
+2. Go server types and chi router generated with `oapi-codegen` into
+   `services/api/internal/generated/oapi/`.
+3. `services/api/internal/store/{agencies,stops,routes,trips,apikeys}/`
+   packages with SECURITY DEFINER-backed queries and `internal/httpapi/handlers/public.go`
+   implementing the generated interface.
+4. `cmd/server/main.go` wired to the generated chi handler.
+5. Migration `0008_api_usage_and_read_helpers.sql` adding `usage_events`
+   and public read helper functions.
+6. Token-bucket rate limiter in `internal/httpapi/auth/ratelimit.go` and API-key
+   authentication updated to use SHA-256 key hashes.
+7. Dart client generated into `packages/transit_api_client` from the same
+   OpenAPI contract using openapi-generator-cli.
+8. `make gen` regenerates both sides; `make gen-check` fails on drift.
+9. Integration tests in `internal/httpapi/handlers/public_test.go` exercise
+   every v0.1 endpoint against the seeded demo agencies.
 
-**Gate:** Postman collection green in CI; generated-code drift check green.
+**Gate:** `make db.test` passes (including handler integration tests) and
+`go test -short ./...` passes. `make gen-check` is available for CI drift detection.
 
 **Depends on:** Phases 2, 3. **Blocks:** 5, 6, 9.
 

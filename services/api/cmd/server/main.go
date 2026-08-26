@@ -5,15 +5,20 @@ package main
 
 import (
 	"context"
-	"encoding/json"
 	"log/slog"
 	"net/http"
 	"os"
 	"time"
 
+	"github.com/bytamilan/transit/services/api/internal/generated/oapi"
 	"github.com/bytamilan/transit/services/api/internal/httpapi/auth"
 	"github.com/bytamilan/transit/services/api/internal/httpapi/handlers"
+	"github.com/bytamilan/transit/services/api/internal/store/agencies"
 	"github.com/bytamilan/transit/services/api/internal/store/audit"
+	"github.com/bytamilan/transit/services/api/internal/store/routes"
+	"github.com/bytamilan/transit/services/api/internal/store/stops"
+	"github.com/bytamilan/transit/services/api/internal/store/trips"
+	"github.com/go-chi/chi/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -26,31 +31,38 @@ func main() {
 		os.Exit(1)
 	}
 
-	authMW, err := auth.NewMiddleware(buildAuthConfig(), pool)
+	authMW, err := auth.NewMiddleware(
+		buildAuthConfig(),
+		pool,
+		auth.WithRateLimiter(auth.NewTokenBucket(60, 100)),
+	)
 	if err != nil {
 		slog.Error("failed to build auth middleware", "err", err)
 		os.Exit(1)
 	}
 
 	admin := &handlers.Admin{Audit: audit.New(pool)}
+	public := handlers.NewPublic(
+		agencies.New(pool),
+		stops.New(pool),
+		routes.New(pool),
+		trips.New(pool),
+	)
 
-	mux := http.NewServeMux()
+	r := chi.NewRouter()
 
-	// Public probes (Phase 0).
-	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, _ *http.Request) {
-		w.WriteHeader(http.StatusOK)
-	})
-	mux.HandleFunc("GET /readyz", func(w http.ResponseWriter, _ *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		_ = json.NewEncoder(w).Encode(map[string]string{"status": "ready"})
-	})
+	// Public read API generated from contracts/openapi.yaml (Phase 4).
+	r.Mount("/", oapi.Handler(public))
 
 	// Authenticated admin surface (Phase 2).
-	mux.Handle("GET /admin/health", authMW.Handler(http.HandlerFunc(admin.Health)))
-	mux.Handle("GET /admin/audit/export", authMW.Handler(http.HandlerFunc(admin.ExportAudit)))
+	r.Group(func(r chi.Router) {
+		r.Use(authMW.Handler)
+		r.Get("/admin/health", admin.Health)
+		r.Get("/admin/audit/export", admin.ExportAudit)
+	})
 
 	slog.Info("transit api listening", "addr", addr)
-	if err := http.ListenAndServe(addr, mux); err != nil {
+	if err := http.ListenAndServe(addr, r); err != nil {
 		slog.Error("server exited", "err", err)
 		os.Exit(1)
 	}

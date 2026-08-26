@@ -1,0 +1,17 @@
+# transit_api_client.model.AgencyLicense
+
+## Load the model package
+```dart
+import 'package:transit_api_client/api.dart';
+```
+
+## Properties
+Name | Type | Description | Notes
+------------ | ------------- | ------------- | -------------
+**spdx** | **String** |  | 
+**attribution** | **String** |  | 
+**termsUrl** | **String** |  | [optional] 
+
+[[Back to Model list]](../README.md#documentation-for-models) [[Back to API list]](../README.md#documentation-for-api-endpoints) [[Back to README]](../README.md)
+
+

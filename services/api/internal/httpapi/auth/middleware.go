@@ -8,12 +8,12 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/bytamilan/transit/services/api/internal/store/apikeys"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/lestrrat-go/jwx/v2/jwa"
 	"github.com/lestrrat-go/jwx/v2/jwk"
 	"github.com/lestrrat-go/jwx/v2/jwt"
-	"golang.org/x/crypto/bcrypt"
 )
 
 // Config selects how the middleware verifies bearer tokens.
@@ -25,17 +25,47 @@ type Config struct {
 	Audience string // JWT aud claim
 }
 
+// MiddlewareOption configures optional middleware behaviour.
+type MiddlewareOption func(*Middleware)
+
+// WithAPIKeyStore sets the API key store used for key authentication.
+func WithAPIKeyStore(s *apikeys.Store) MiddlewareOption {
+	return func(m *Middleware) { m.keys = s }
+}
+
+// WithRateLimiter sets the token-bucket rate limiter used for API keys.
+func WithRateLimiter(tb *TokenBucket) MiddlewareOption {
+	return func(m *Middleware) { m.limiter = tb }
+}
+
+// WithUsageRecorder overrides how usage events are recorded.
+func WithUsageRecorder(fn func(ctx context.Context, keyID uuid.UUID, endpoint string, status, latencyMs int) error) MiddlewareOption {
+	return func(m *Middleware) { m.recordUsage = fn }
+}
+
 // Middleware authenticates requests and stores an Actor in the request context.
 type Middleware struct {
-	cfg Config
-	db  *pgxpool.Pool
-	set jwk.Set
+	cfg        Config
+	db         *pgxpool.Pool
+	set        jwk.Set
+	keys       *apikeys.Store
+	limiter    *TokenBucket
+	recordUsage func(ctx context.Context, keyID uuid.UUID, endpoint string, status, latencyMs int) error
 }
 
 // NewMiddleware builds an authentication middleware. db may be nil when API-key
 // authentication is not required.
-func NewMiddleware(cfg Config, db *pgxpool.Pool) (*Middleware, error) {
+func NewMiddleware(cfg Config, db *pgxpool.Pool, opts ...MiddlewareOption) (*Middleware, error) {
 	m := &Middleware{cfg: cfg, db: db}
+	for _, o := range opts {
+		o(m)
+	}
+	if db != nil && m.keys == nil {
+		m.keys = apikeys.New(db)
+	}
+	if db != nil && m.recordUsage == nil {
+		m.recordUsage = apikeys.New(db).RecordUsage
+	}
 	switch cfg.Mode {
 	case "hmac":
 		if len(cfg.HMAC) == 0 {
@@ -171,46 +201,33 @@ func (m *Middleware) jwtActor(ctx context.Context, token string) (Actor, error) 
 }
 
 func (m *Middleware) apiKeyActor(ctx context.Context, key string) (Actor, bool) {
-	if m.db == nil {
+	if m.keys == nil {
 		return Actor{}, false
 	}
 	if key == "" {
 		return Actor{}, false
 	}
 
-	// API keys are stored as bcrypt hashes. We look up all rows for the key's
-	// prefix and compare hashes. This is intentionally simple for Phase 2;
-	// Phase 4 will add a key ID prefix and token-bucket rate limiting.
-	rows, err := m.db.Query(ctx, `
-		SELECT id, agency_id, key_hash, scopes
-		FROM api_keys
-		WHERE key_hash <> ''
-	`)
+	hash := apikeys.HashKey(key)
+	k, err := m.keys.Lookup(ctx, hash)
 	if err != nil {
 		slog.Debug("auth: api key lookup failed", "err", err)
 		return Actor{}, false
 	}
-	defer rows.Close()
 
-	for rows.Next() {
-		var id uuid.UUID
-		var agencyID uuid.UUID
-		var hash string
-		var scopes []string
-		if err := rows.Scan(&id, &agencyID, &hash, &scopes); err != nil {
-			continue
-		}
-		if bcrypt.CompareHashAndPassword([]byte(hash), []byte(key)) == nil {
-			return Actor{
-				UserID:   id,
-				AgencyID: agencyID,
-				Roles:    []string{"data_consumer"},
-				IsAPIKey: true,
-				Scopes:   scopes,
-			}, true
+	if m.limiter != nil {
+		if !m.limiter.Allow(k.ID.String()) {
+			return Actor{}, false
 		}
 	}
-	return Actor{}, false
+
+	return Actor{
+		UserID:   k.ID,
+		AgencyID: k.AgencyID,
+		Roles:    []string{"data_consumer"},
+		IsAPIKey: true,
+		Scopes:   k.Scopes,
+	}, true
 }
 
 func parseIP(r *http.Request) net.IP {

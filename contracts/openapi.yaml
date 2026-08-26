@@ -11,29 +11,334 @@ info:
 servers:
   - url: http://localhost:8080
     description: Local development
+
 paths:
   /healthz:
     get:
       operationId: healthz
       summary: Liveness probe
+      security: []
       responses:
         "200":
           description: Service is alive
+
   /readyz:
     get:
       operationId: readyz
       summary: Readiness probe
+      security: []
       responses:
         "200":
           description: Service is ready
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  status:
-                    type: string
-                    example: ready
+                $ref: "#/components/schemas/ReadyResponse"
+
+  /v0/agencies/{slug}:
+    get:
+      operationId: getAgency
+      summary: Get public agency metadata
+      security: []
+      parameters:
+        - name: slug
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Agency metadata
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Agency"
+        "404":
+          description: Agency not found
+
+  /v0/agencies/{slug}/config:
+    get:
+      operationId: getAgencyConfig
+      summary: Get agency runtime configuration
+      security: []
+      parameters:
+        - name: slug
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Agency configuration
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AgencyConfig"
+        "404":
+          description: Agency not found
+
+  /v0/agencies/{slug}/stops:
+    get:
+      operationId: listStops
+      summary: List stops for an agency
+      security: []
+      parameters:
+        - name: slug
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: lat
+          in: query
+          schema:
+            type: number
+            format: double
+        - name: lon
+          in: query
+          schema:
+            type: number
+            format: double
+        - name: radius_m
+          in: query
+          schema:
+            type: number
+            format: double
+            default: 500
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 100
+            maximum: 1000
+        - name: offset
+          in: query
+          schema:
+            type: integer
+            default: 0
+      responses:
+        "200":
+          description: Paginated stop list
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StopList"
+
+  /v0/agencies/{slug}/stops/{stop_id}:
+    get:
+      operationId: getStop
+      summary: Get a single stop
+      security: []
+      parameters:
+        - name: slug
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: stop_id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Stop details
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Stop"
+        "404":
+          description: Stop not found
+
+  /v0/agencies/{slug}/routes:
+    get:
+      operationId: listRoutes
+      summary: List routes for an agency
+      security: []
+      parameters:
+        - name: slug
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 100
+            maximum: 1000
+        - name: offset
+          in: query
+          schema:
+            type: integer
+            default: 0
+      responses:
+        "200":
+          description: Paginated route list
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RouteList"
+
+  /v0/agencies/{slug}/routes/{route_id}:
+    get:
+      operationId: getRoute
+      summary: Get a single route
+      security: []
+      parameters:
+        - name: slug
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: route_id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Route details
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Route"
+        "404":
+          description: Route not found
+
+  /v0/agencies/{slug}/trips:
+    get:
+      operationId: listTrips
+      summary: List trips for an agency
+      security: []
+      parameters:
+        - name: slug
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: route_id
+          in: query
+          schema:
+            type: string
+        - name: service_id
+          in: query
+          schema:
+            type: string
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 100
+            maximum: 1000
+        - name: offset
+          in: query
+          schema:
+            type: integer
+            default: 0
+      responses:
+        "200":
+          description: Paginated trip list
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TripList"
+
+  /v0/agencies/{slug}/trips/{trip_id}:
+    get:
+      operationId: getTrip
+      summary: Get a single trip
+      security: []
+      parameters:
+        - name: slug
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: trip_id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Trip details
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Trip"
+        "404":
+          description: Trip not found
+
+  /v0/agencies/{slug}/trips/{trip_id}/stop_times:
+    get:
+      operationId: listTripStopTimes
+      summary: List stop times for a trip
+      security: []
+      parameters:
+        - name: slug
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: trip_id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Stop time list
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StopTimeList"
+
+  /v0/agencies/{slug}/arrivals:
+    get:
+      operationId: listArrivals
+      summary: List upcoming arrivals for an agency
+      description: >-
+        Returns static timetable arrivals. Realtime predictions will be layered
+        on top in Phase 8.
+      security: []
+      parameters:
+        - name: slug
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: stop_id
+          in: query
+          schema:
+            type: string
+        - name: route_id
+          in: query
+          schema:
+            type: string
+        - name: service_date
+          in: query
+          schema:
+            type: string
+            format: date
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 50
+            maximum: 500
+        - name: offset
+          in: query
+          schema:
+            type: integer
+            default: 0
+      responses:
+        "200":
+          description: Paginated arrival list
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ArrivalList"
+
 components:
   securitySchemes:
     bearerAuth:
@@ -46,3 +351,292 @@ components:
       in: header
       name: X-API-Key
       description: Portal-issued data-consumer key, token-bucket rate limited.
+
+  schemas:
+    ReadyResponse:
+      type: object
+      required: [status]
+      properties:
+        status:
+          type: string
+          example: ready
+
+    Agency:
+      type: object
+      required: [id, slug, name, timezone]
+      properties:
+        id:
+          type: string
+          format: uuid
+        slug:
+          type: string
+        name:
+          type: object
+          additionalProperties:
+            type: string
+        timezone:
+          type: string
+
+    AgencyConfig:
+      type: object
+      required: [locales, currency, distance_unit, modes, map_provider, license, branding, driver_ops]
+      properties:
+        locales:
+          type: array
+          items:
+            type: string
+        currency:
+          type: string
+        distance_unit:
+          type: string
+          enum: [metric, imperial]
+        modes:
+          type: array
+          items:
+            type: string
+        map_provider:
+          type: string
+          enum: [google, maplibre, protomaps]
+        license:
+          $ref: "#/components/schemas/AgencyLicense"
+        branding:
+          $ref: "#/components/schemas/AgencyBranding"
+        driver_ops:
+          $ref: "#/components/schemas/DriverOpsConfig"
+
+    AgencyLicense:
+      type: object
+      required: [spdx, attribution]
+      properties:
+        spdx:
+          type: string
+        attribution:
+          type: string
+        terms_url:
+          type: string
+
+    AgencyBranding:
+      type: object
+      required: [primary]
+      properties:
+        primary:
+          type: string
+        secondary:
+          type: string
+        logo_url:
+          type: string
+        font:
+          type: string
+
+    DriverOpsConfig:
+      type: object
+      required: [stop_geofence_m, ping_interval_moving_s, ping_interval_idle_s, auto_start_trip, lock_ui_above_kmh]
+      properties:
+        stop_geofence_m:
+          type: number
+        ping_interval_moving_s:
+          type: integer
+        ping_interval_idle_s:
+          type: integer
+        auto_start_trip:
+          type: boolean
+        lock_ui_above_kmh:
+          type: number
+
+    Stop:
+      type: object
+      required: [stop_id, stop_name]
+      properties:
+        stop_id:
+          type: string
+        stop_code:
+          type: string
+        stop_name:
+          type: string
+        stop_desc:
+          type: string
+        stop_lat:
+          type: number
+          format: double
+        stop_lon:
+          type: number
+          format: double
+        location_type:
+          type: integer
+        parent_station:
+          type: string
+        wheelchair_boarding:
+          type: integer
+        platform_code:
+          type: string
+
+    StopList:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/Stop"
+        total:
+          type: integer
+        limit:
+          type: integer
+        offset:
+          type: integer
+
+    Route:
+      type: object
+      required: [route_id, route_type]
+      properties:
+        route_id:
+          type: string
+        route_short_name:
+          type: string
+        route_long_name:
+          type: string
+        route_desc:
+          type: string
+        route_type:
+          type: integer
+        route_url:
+          type: string
+        route_color:
+          type: string
+        route_text_color:
+          type: string
+        route_sort_order:
+          type: integer
+
+    RouteList:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/Route"
+        total:
+          type: integer
+        limit:
+          type: integer
+        offset:
+          type: integer
+
+    Trip:
+      type: object
+      required: [trip_id, route_id, service_id]
+      properties:
+        trip_id:
+          type: string
+        route_id:
+          type: string
+        service_id:
+          type: string
+        trip_headsign:
+          type: string
+        trip_short_name:
+          type: string
+        direction_id:
+          type: integer
+        block_id:
+          type: string
+        shape_id:
+          type: string
+        wheelchair_accessible:
+          type: integer
+        bikes_allowed:
+          type: integer
+
+    TripList:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/Trip"
+        total:
+          type: integer
+        limit:
+          type: integer
+        offset:
+          type: integer
+
+    StopTime:
+      type: object
+      required: [trip_id, stop_id, stop_sequence]
+      properties:
+        trip_id:
+          type: string
+        stop_id:
+          type: string
+        arrival_time:
+          type: string
+          description: HH:MM:SS, may exceed 24:00:00
+        departure_time:
+          type: string
+        stop_sequence:
+          type: integer
+        stop_headsign:
+          type: string
+        pickup_type:
+          type: integer
+        drop_off_type:
+          type: integer
+        timepoint:
+          type: integer
+
+    StopTimeList:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/StopTime"
+
+    Arrival:
+      type: object
+      required: [stop_id, trip_id, route_id, arrival_time, departure_time, stop_sequence]
+      properties:
+        stop_id:
+          type: string
+        trip_id:
+          type: string
+        route_id:
+          type: string
+        route_short_name:
+          type: string
+        trip_headsign:
+          type: string
+        arrival_time:
+          type: string
+        departure_time:
+          type: string
+        stop_sequence:
+          type: integer
+        wheelchair_accessible:
+          type: integer
+
+    ArrivalList:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/Arrival"
+        total:
+          type: integer
+        limit:
+          type: integer
+        offset:
+          type: integer
+
+    Error:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: string

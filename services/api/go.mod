@@ -4,14 +4,17 @@ go 1.26.0
 
 require (
 	github.com/OneBusAway/go-gtfs v1.1.1
+	github.com/go-chi/chi/v5 v5.3.2
 	github.com/google/uuid v1.6.0
 	github.com/jackc/pgx/v5 v5.10.0
 	github.com/lestrrat-go/jwx/v2 v2.1.7
+	github.com/oapi-codegen/runtime v1.7.0
 	golang.org/x/crypto v0.55.0
-	google.golang.org/protobuf v1.27.1
+	google.golang.org/protobuf v1.34.1
 )
 
 require (
+	github.com/apapsch/go-jsonmerge/v2 v2.0.0 // indirect
 	github.com/decred/dcrd/dcrec/secp256k1/v4 v4.4.1 // indirect
 	github.com/goccy/go-json v0.10.6 // indirect
 	github.com/jackc/pgpassfile v1.0.0 // indirect
