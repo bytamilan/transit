@@ -14,7 +14,7 @@
 | 3 | `gtfs_static` + `gtfs_rt` adapters, ingest scheduler | ✅ |
 | 4 | OpenAPI v0.1 + Go read API + generated Dart client | ✅ |
 | 5 | Rider app | ✅ |
-| 6 | Admin console: fleet, drivers, duty assignment | ⚪ |
+| 6 | Admin console: fleet, drivers, duty assignment | 🔵 |
 | 7 | Driver app: always-on shell + telemetry | ⚪ |
 | 8 | Server-side tracking → GTFS-RT | ⚪ |
 | 9 | Live dispatch board + alerts | ⚪ |
@@ -235,12 +235,51 @@ document limits.
 
 ---
 
-## Phase 6 — Admin console: fleet, drivers, blocks, duty assignment
+## Phase 6 — Admin console: fleet, drivers, blocks, duty assignment 🔵
 
 **Objective:** the operational back office; the write path behind the future
 `manual` adapter.
 
-**Tasks:**
+**Delivered:**
+1. Migrations `0009_fleet_and_dispatch.sql` (`vehicles`, `blocks`,
+   `duty_assignments`, `duty_events`, RLS, SECURITY DEFINER helpers for the
+   Go admin API) and `0010_route_editor.sql` (write helpers for `routes`,
+   `trips`, `stop_times`, `calendar`). `depots` and `driver_profiles` already
+   existed from Phase 2.
+2. Go: `internal/store/{vehicles,drivers,depots,blocks,duty,calendar}` +
+   write methods added to `store/routes` and `store/trips`;
+   `internal/dispatch` implements conflict detection (double-booking,
+   maintenance hold, expired licence, suspended driver, rest-gap via
+   `block_time_span` + agency timezone per ADR 0002), recurring weekly
+   roster expansion, and the reassignment/handover state machine, all
+   audited via the existing `audit.Writer`.
+3. `internal/gotrue` calls GoTrue's admin API to invite drivers by
+   email/phone; `/admin/drivers` also accepts an existing `user_id` so the
+   flow works without a live GoTrue instance (used by tests).
+4. Hand-rolled JSON handlers (`internal/httpapi/handlers/{fleet,roster,
+   routes_admin}.go`) registered directly on the chi router in
+   `cmd/server/main.go`, following the same pattern as the Phase 2
+   `/admin/health` and `/admin/audit/export` endpoints — **not**
+   OpenAPI-generated, since `/admin` is an internal operational surface, not
+   the versioned public `/v0` contract.
+5. `apps/portal`: Next.js 14 App Router + Tailwind + `@supabase/ssr`.
+   `/admin` pages for vehicles, drivers (both with CSV bulk import), routes
+   & timetables (route/calendar/trip/stop-sequence editors), and the duty
+   roster (assign, see conflicts, apply a recurring weekly pattern). The
+   portal calls the Go API with the signed-in user's Supabase access token;
+   it never talks to Postgres directly.
+6. Go integration tests (`internal/dispatch/dispatch_test.go`, build tag
+   `integration`) cover the happy path and every conflict rule, reassignment,
+   handover, unassigned-block listing and roster expansion (including a row
+   that succeeds alongside one skipped for a conflict).
+
+**Not yet verified — needs a live Postgres:** the sandbox this phase was
+built in could not start Docker, so `make db.test` has not actually been
+run against the new migrations. Run `make db.test` and `make portal.build`
+before treating this phase as done; `go build`/`go vet`/`go test -short`
+and `next build`/`tsc --noEmit` all pass already.
+
+**Tasks (original spec, for reference):**
 1. Portal `/admin` gated by `fleet_manager`+ (JWT claim check + server
    re-check).
 2. **Vehicles:** CRUD (registration, fleet number, capacity class,

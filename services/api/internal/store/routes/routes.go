@@ -101,3 +101,25 @@ func (r *Reader) Count(ctx context.Context, agencyID uuid.UUID) (int, error) {
 	}
 	return n, nil
 }
+
+// Upsert creates or updates a route (the admin routes editor, Phase 6.4).
+func (r *Reader) Upsert(ctx context.Context, agencyID uuid.UUID, rt Route) error {
+	if r.pool == nil {
+		return fmt.Errorf("routes reader not connected to a database")
+	}
+	_, err := r.pool.Exec(ctx,
+		`SELECT transit.upsert_route($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
+		agencyID, rt.RouteID, rt.RouteShortName, rt.RouteLongName, rt.RouteDesc,
+		rt.RouteType, rt.RouteURL, rt.RouteColor, rt.RouteTextColor, rt.RouteSortOrder,
+	)
+	return err
+}
+
+// Delete removes a route.
+func (r *Reader) Delete(ctx context.Context, agencyID uuid.UUID, routeID string) error {
+	if r.pool == nil {
+		return fmt.Errorf("routes reader not connected to a database")
+	}
+	_, err := r.pool.Exec(ctx, `SELECT transit.delete_route($1, $2)`, agencyID, routeID)
+	return err
+}

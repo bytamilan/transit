@@ -3,6 +3,7 @@ package trips
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"time"
 
@@ -108,16 +109,17 @@ func (r *Reader) Count(ctx context.Context, agencyID uuid.UUID, routeID, service
 	return n, nil
 }
 
-// StopTime is a canonical GTFS stop time.
+// StopTime is a canonical GTFS stop time. JSON tags match the column names
+// replace_stop_times's jsonb_to_recordset expects.
 type StopTime struct {
-	StopID        string
-	ArrivalTime   string
-	DepartureTime string
-	StopSequence  int
-	StopHeadsign  *string
-	PickupType    *int
-	DropOffType   *int
-	Timepoint     *int
+	StopID        string  `json:"stop_id"`
+	ArrivalTime   string  `json:"arrival_time"`
+	DepartureTime string  `json:"departure_time"`
+	StopSequence  int     `json:"stop_sequence"`
+	StopHeadsign  *string `json:"stop_headsign,omitempty"`
+	PickupType    *int    `json:"pickup_type,omitempty"`
+	DropOffType   *int    `json:"drop_off_type,omitempty"`
+	Timepoint     *int    `json:"timepoint,omitempty"`
 }
 
 // ListStopTimes returns stop times for a trip.
@@ -226,6 +228,43 @@ func (r *Reader) CountArrivals(ctx context.Context, agencyID uuid.UUID, stopID, 
 		return 0, err
 	}
 	return n, nil
+}
+
+// Upsert creates or updates a trip (the admin routes editor, Phase 6.4).
+func (r *Reader) Upsert(ctx context.Context, agencyID uuid.UUID, t Trip) error {
+	if r.pool == nil {
+		return fmt.Errorf("trips reader not connected to a database")
+	}
+	_, err := r.pool.Exec(ctx,
+		`SELECT transit.upsert_trip($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`,
+		agencyID, t.TripID, t.RouteID, t.ServiceID, t.TripHeadsign, t.TripShortName,
+		t.DirectionID, t.BlockID, t.ShapeID, t.WheelchairAccessible, t.BikesAllowed,
+	)
+	return err
+}
+
+// Delete removes a trip (and its stop_times, via ON DELETE CASCADE).
+func (r *Reader) Delete(ctx context.Context, agencyID uuid.UUID, tripID string) error {
+	if r.pool == nil {
+		return fmt.Errorf("trips reader not connected to a database")
+	}
+	_, err := r.pool.Exec(ctx, `SELECT transit.delete_trip($1, $2)`, agencyID, tripID)
+	return err
+}
+
+// ReplaceStopTimes atomically replaces every stop_times row for a trip —
+// used when the editor reorders or edits a trip's stop sequence, so no stale
+// rows are left behind at old sequence numbers.
+func (r *Reader) ReplaceStopTimes(ctx context.Context, agencyID uuid.UUID, tripID string, stopTimes []StopTime) error {
+	if r.pool == nil {
+		return fmt.Errorf("trips reader not connected to a database")
+	}
+	payload, err := json.Marshal(stopTimes)
+	if err != nil {
+		return fmt.Errorf("marshal stop times: %w", err)
+	}
+	_, err = r.pool.Exec(ctx, `SELECT transit.replace_stop_times($1, $2, $3)`, agencyID, tripID, payload)
+	return err
 }
 
 func nullString(s string) *string {

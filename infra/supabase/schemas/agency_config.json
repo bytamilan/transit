@@ -139,6 +139,16 @@
         "lock_ui_above_kmh": {
           "type": "number",
           "minimum": 0
+        },
+        "min_rest_gap_hours": {
+          "type": "number",
+          "minimum": 0,
+          "description": "Minimum rest gap required between a driver's consecutive duty assignments. Defaults to 8 when omitted."
+        },
+        "licence_expiry_warning_days": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "How many days before licence expiry a driver is flagged for warning rather than blocked. Defaults to 30 when omitted."
         }
       },
       "additionalProperties": false

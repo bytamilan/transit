@@ -26,7 +26,7 @@ DB_URL_DOCKER ?= postgres://postgres:$(POSTGRES_PASSWORD)@host.docker.internal:5
 PSQL := docker run --rm -e PGPASSWORD=$(POSTGRES_PASSWORD) -v "$(PWD)/infra/supabase:/infra/supabase" $(TEST_DB_IMAGE) psql
 TEST_PSQL := docker exec -e PGPASSWORD=$(TEST_DB_PASSWORD) transit-test-db psql
 
-.PHONY: help dev down logs lint test gen ingest.build ingest feedcheck db.migrate db.seed db.test
+.PHONY: help dev down logs lint test gen ingest.build ingest feedcheck db.migrate db.seed db.test portal.install portal.dev portal.build
 
 help: ## Show this help
 	@grep -E '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-10s\033[0m %s\n", $$1, $$2}'
@@ -54,6 +54,16 @@ lint: ## Lint Go, Dart and portal code
 
 test: ## Run Go unit tests (no database required)
 	cd services/api && go test -short ./...
+
+portal.install: ## Install portal (Next.js admin console) dependencies
+	pnpm -C apps/portal install
+
+portal.dev: ## Run the admin portal dev server (needs apps/portal/.env.local)
+	pnpm -C apps/portal dev
+
+portal.build: ## Type-check and production-build the admin portal
+	pnpm -C apps/portal typecheck
+	pnpm -C apps/portal build
 
 gen: ## Regenerate server & client types from contracts/openapi.yaml
 	cd services/api && $(OAPI_CODEGEN) --config oapi-codegen.yaml ../../contracts/openapi.yaml

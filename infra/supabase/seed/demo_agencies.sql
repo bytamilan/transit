@@ -117,6 +117,31 @@ ON CONFLICT (agency_id, trip_id, stop_sequence) DO UPDATE SET
     updated_at = now();
 
 -- ---------------------------------------------------------------------------
+-- Phase 6: a depot, a vehicle and a block for demo-metro so the admin
+-- console (Vehicles, Duty roster) isn't empty on first login.
+-- ---------------------------------------------------------------------------
+WITH agency_a AS (
+    SELECT id FROM agencies WHERE slug = 'demo-metro'
+),
+depot_a AS (
+    INSERT INTO depots (agency_id, name)
+    SELECT id, 'Central Depot' FROM agency_a
+    ON CONFLICT (agency_id, name) DO UPDATE SET updated_at = now()
+    RETURNING id, agency_id
+)
+INSERT INTO vehicles (agency_id, depot_id, fleet_no, registration, capacity_class, status)
+SELECT depot_a.agency_id, depot_a.id, 'BUS-001', 'SDM1234A', 'standard', 'active'
+FROM depot_a
+ON CONFLICT (agency_id, fleet_no) DO UPDATE SET
+    depot_id = EXCLUDED.depot_id, registration = EXCLUDED.registration, updated_at = now();
+
+INSERT INTO blocks (agency_id, block_ref, service_date, trip_ids)
+SELECT id, 'blk_a_1', '2026-01-05'::date, ARRAY['a1_0600']
+FROM agencies WHERE slug = 'demo-metro'
+ON CONFLICT (agency_id, block_ref, service_date) DO UPDATE SET
+    trip_ids = EXCLUDED.trip_ids, updated_at = now();
+
+-- ---------------------------------------------------------------------------
 -- Agency B: Demo Transit (imperial, USD, America/Los_Angeles)
 -- ---------------------------------------------------------------------------
 WITH agency_b AS (
