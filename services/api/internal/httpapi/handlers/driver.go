@@ -10,6 +10,7 @@ import (
 	"github.com/bytamilan/transit/services/api/internal/httpapi/rbac"
 	"github.com/bytamilan/transit/services/api/internal/store/agencies"
 	"github.com/bytamilan/transit/services/api/internal/store/blocks"
+	"github.com/bytamilan/transit/services/api/internal/store/dispatchmessages"
 	"github.com/bytamilan/transit/services/api/internal/store/duty"
 	"github.com/bytamilan/transit/services/api/internal/store/incidents"
 	"github.com/bytamilan/transit/services/api/internal/store/pings"
@@ -26,6 +27,7 @@ type Driver struct {
 	Blocks    *blocks.Store
 	Pings     *pings.Store
 	Incidents *incidents.Store
+	Messages  *dispatchmessages.Store
 }
 
 // GetAgency returns the caller's own agency metadata and config — the driver
@@ -295,4 +297,57 @@ func (h *Driver) SubmitIncident(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusCreated, map[string]any{"id": reportID.String()})
+}
+
+type dutyMessageResponse struct {
+	ID        string  `json:"id"`
+	Body      string  `json:"body"`
+	CreatedAt string  `json:"created_at"`
+	ReadAt    *string `json:"read_at,omitempty"`
+}
+
+// ListMessages returns dispatcher messages for one of the caller's own duty
+// assignments (brief §9: "message the driver" — polled here, not pushed).
+func (h *Driver) ListMessages(w http.ResponseWriter, r *http.Request) {
+	actor := auth.FromContext(r.Context())
+	if !requirePermission(w, actor, rbac.PermDriverRead) {
+		return
+	}
+	a := h.ownAssignment(w, r, actor)
+	if a == nil {
+		return
+	}
+	msgs, err := h.Messages.ListForAssignment(r.Context(), actor.AgencyID, a.ID, false)
+	if err != nil {
+		internalError(w, "list dispatch messages", err)
+		return
+	}
+	out := make([]dutyMessageResponse, 0, len(msgs))
+	for _, m := range msgs {
+		resp := dutyMessageResponse{ID: m.ID.String(), Body: m.Body, CreatedAt: m.CreatedAt.Format(time.RFC3339)}
+		if m.ReadAt != nil {
+			s := m.ReadAt.Format(time.RFC3339)
+			resp.ReadAt = &s
+		}
+		out = append(out, resp)
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"items": out})
+}
+
+// MarkMessagesRead marks every unread message on one of the caller's own
+// duty assignments as read.
+func (h *Driver) MarkMessagesRead(w http.ResponseWriter, r *http.Request) {
+	actor := auth.FromContext(r.Context())
+	if !requirePermission(w, actor, rbac.PermDriverWrite) {
+		return
+	}
+	a := h.ownAssignment(w, r, actor)
+	if a == nil {
+		return
+	}
+	if err := h.Messages.MarkRead(r.Context(), actor.AgencyID, a.ID); err != nil {
+		internalError(w, "mark dispatch messages read", err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
 }

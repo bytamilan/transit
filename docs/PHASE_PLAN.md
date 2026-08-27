@@ -17,7 +17,7 @@
 | 6 | Admin console: fleet, drivers, duty assignment | 🔵 |
 | 7 | Driver app: always-on shell + telemetry | 🔵 |
 | 8 | Server-side tracking → GTFS-RT | 🔵 |
-| 9 | Live dispatch board + alerts | ⚪ |
+| 9 | Live dispatch board + alerts | 🔵 |
 | 10 | `manual` adapter + GTFS/GTFS-RT export | ⚪ |
 | 11 | RAPTOR planner, alerts, fares | ⚪ |
 | 12 | Hardening & release | ⚪ |
@@ -477,20 +477,88 @@ here, not deferred to Phase 12.
 
 ---
 
-## Phase 9 — Live dispatch board + off-route & incident alerts
+## Phase 9 — Live dispatch board + off-route & incident alerts 🔵
 
 **Objective:** dispatchers see and steer the live fleet.
 
-**Tasks:**
-1. `/admin/dispatch`: map of active vehicles with delay colouring, occupancy,
-   off-route flags, open incidents; Supabase Realtime subscriptions scoped
-   by RLS (dispatchers see only open duties in their agency/depot, §8).
-2. Vehicle drill-down: ping trace view, message driver, reassign (uses
-   Phase 6 handover state machine mid-duty).
-3. Incident intake from the driver app (one-tap + voice note) → dispatcher
-   queue → resolution workflow, all audited.
-4. Alerting: off-route sustained beyond threshold, unassigned blocks at
-   service-day start, licence-expiry warnings.
+**Delivered:**
+1. Migration `0013_dispatch_board.sql`: `off_route` on `vehicle_trips`
+   (`internal/tracking` now flags a *currently* sustained diversion, not just
+   a past one affecting a resolved stop's confidence — `ReplayBlock`'s new
+   `CurrentlyOffRoute`, covered by its own tests), `dispatch_messages`
+   (polled driver<->dispatcher messaging — no FCM/APNs plumbing in this
+   codebase, see the scope note below), and incident-resolution helpers.
+2. `/admin/dispatch` (portal): a live vehicle list — fleet, driver, delay
+   (colour-coded), occupancy, off-route badge — polled every 10s, plus an
+   alerts strip (unassigned blocks today, licence warnings/expired,
+   off-route count, open incidents). Clicking a vehicle opens a drill-down:
+   recent ping trace, a message-the-driver form, and reassign/vehicle-swap
+   (handover) forms that call Phase 6's existing `internal/dispatch`
+   conflict-checked endpoints — Phase 6 had built the state machine but
+   never exposed it in a screen; this is that screen. `/admin/incidents`:
+   the resolution queue, open/all filter, resolve action.
+3. Backend: `GET /admin/dispatch/vehicles`, `GET /admin/dispatch/alerts`,
+   `GET /admin/duty-assignments/{id}/pings` (the dispatch-role ping-trace
+   drill-down — dispatchers may see live pings per brief §8, unlike the
+   public/rider surfaces Phase 8 locked down; `privacy_test.go` was updated
+   to prove this one path is dispatch-role-gated rather than absent, and a
+   new test proves every *other* guessed path still isn't there),
+   `POST .../message`, `GET/POST /admin/incidents[/{id}/resolve]` — every
+   mutation audited.
+4. Driver app: `DriverApi.submitPings` now distinguishes a transient failure
+   from `ownershipLost` (403/409 — the assignment isn't this driver's open
+   duty anymore, because a dispatcher reassigned or ended it). On
+   `ownershipLost` the foreground service stops tracking, clears
+   `RecoveryStore`, and shows a local notification — the concrete way "the
+   driver app... reflects the swap" is satisfied for reassignment. A new
+   30-second timer polls for dispatch messages and shows a local
+   notification for unread ones.
+
+**Scope reductions, flagged:**
+- **No geographic map.** `/admin/dispatch` is a live *list*, not a MapLibre
+  map — the portal (Next.js) has no JS mapping library wired up yet (the
+  Flutter apps' `transit_maps` package doesn't apply here), and adding one
+  blind, unable to visually verify it, was judged lower value than a
+  correctly-working list with the same data. The map is real follow-up
+  work, not dropped scope.
+- **No Supabase Realtime.** The dispatch board and driver messaging both
+  poll (10s and 30s respectively) rather than subscribing to Realtime
+  channels — simpler to reason about and verify without a live Supabase
+  instance to test a channel against; also true of GTFS-RT and the arrivals
+  endpoint since Phase 8.
+- **Handover completion for the *new* driver still needs an app reopen.**
+  A driver whose duty is reassigned to someone *else* is detected (via
+  `ownershipLost`) and stops cleanly. The driver *newly* assigned mid-shift
+  picks up the new duty the next time they open the app (which reads
+  `/driver/duty` fresh) rather than automatically — seamless hot-handoff to
+  a new assignment id inside an already-running background isolate was
+  judged too complex to get right without a device to test on.
+- **Incident intake's voice-note half wasn't built.** The driver app's
+  one-tap incident report (Phase 7) has no audio capture/upload; only text
+  notes exist.
+
+**Not yet verified — needs a live Postgres and real devices:** same
+limitation as Phases 6–8 (Docker unavailable, migration `0013` unrun), plus
+this phase's own gate — a live end-to-end reassignment across driver app,
+server, dispatch board and public feed — fundamentally needs two real
+devices/sessions to observe, which this sandbox cannot provide. `go build`,
+`go vet` (`-tags integration` too), `go test -short ./...`, `flutter
+analyze`/`flutter test`, and `tsc --noEmit`/`next build` for the portal are
+all green.
+
+**Tasks (original spec, for reference):**
+1. ~~`/admin/dispatch`: map of active vehicles~~ — delivered as a list, not
+   a map; delay colouring, occupancy and off-route flags all present. Open
+   incidents surfaced via the alerts strip and `/admin/incidents`, not
+   inline on the vehicle row. Supabase Realtime subscriptions not used —
+   polling instead (see scope reductions above).
+2. ~~Vehicle drill-down~~ — delivered (ping trace, message driver, reassign
+   via Phase 6's handover state machine).
+3. ~~Incident intake ... → dispatcher queue → resolution workflow, all
+   audited~~ — delivered except the voice-note capture half (see above).
+4. ~~Alerting~~ — delivered (off-route, unassigned blocks, licence-expiry
+   warnings) as a polled `/admin/dispatch/alerts` read, not push
+   notifications to dispatchers.
 
 **Gate:** mid-duty reassignment works end to end — driver app, server state,
 dispatch board and public feed all reflect the swap.

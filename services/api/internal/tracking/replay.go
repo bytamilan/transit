@@ -96,6 +96,12 @@ type ReplayInput struct {
 type ReplayResult struct {
 	StopEvents   []StopEventResult
 	VehicleTrips []VehicleTripResult
+	// CurrentlyOffRoute is true when the vehicle's most recent fix is part of
+	// a sustained off-route run (brief §9: "sustained departure from the
+	// shape... raises a diversion flag"). Applies to whichever trip is
+	// currently in progress — the caller attributes it to the last entry in
+	// VehicleTrips.
+	CurrentlyOffRoute bool
 }
 
 // ReplayBlock re-derives stop arrivals/departures, delay and trip boundaries
@@ -130,7 +136,11 @@ func ReplayBlock(input ReplayInput) ReplayResult {
 		}
 	}
 
-	return ReplayResult{StopEvents: events, VehicleTrips: groupVehicleTrips(input.Stops, events)}
+	return ReplayResult{
+		StopEvents:        events,
+		VehicleTrips:      groupVehicleTrips(input.Stops, events),
+		CurrentlyOffRoute: offRoute[len(offRoute)-1],
+	}
 }
 
 // resolveStop finds the arrival/departure for one stop, searching fixes from

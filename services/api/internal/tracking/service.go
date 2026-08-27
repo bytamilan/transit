@@ -123,6 +123,16 @@ func (s *Service) ProcessAssignment(ctx context.Context, a duty.OpenAssignment) 
 		tripIDToVehicleTripID[vt.TripID] = id
 	}
 
+	// Off-route only ever applies to the vehicle's *current* position, which
+	// belongs to whichever trip is last in the block's order.
+	if last := len(result.VehicleTrips) - 1; last >= 0 {
+		if id, ok := tripIDToVehicleTripID[result.VehicleTrips[last].TripID]; ok {
+			if err := s.VehicleTrips.SetOffRoute(ctx, a.AgencyID, id, result.CurrentlyOffRoute); err != nil {
+				return fmt.Errorf("set off-route flag: %w", err)
+			}
+		}
+	}
+
 	for _, ev := range result.StopEvents {
 		vehicleTripID, ok := tripIDToVehicleTripID[ev.TripID]
 		if !ok {

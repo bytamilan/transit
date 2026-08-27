@@ -20,6 +20,7 @@ import (
 	"github.com/bytamilan/transit/services/api/internal/store/blocks"
 	"github.com/bytamilan/transit/services/api/internal/store/calendar"
 	"github.com/bytamilan/transit/services/api/internal/store/depots"
+	"github.com/bytamilan/transit/services/api/internal/store/dispatchmessages"
 	"github.com/bytamilan/transit/services/api/internal/store/drivers"
 	"github.com/bytamilan/transit/services/api/internal/store/duty"
 	"github.com/bytamilan/transit/services/api/internal/store/incidents"
@@ -87,17 +88,34 @@ func main() {
 		Calendar: calendar.New(pool),
 	}
 	dutyStore := duty.New(pool)
+	pingStore := pings.New(pool)
+	incidentStore := incidents.New(pool)
+	messageStore := dispatchmessages.New(pool)
+	driverStore := drivers.New(pool)
+	vehicleStore := vehicles.New(pool)
 	roster := &handlers.Roster{
 		Dispatch: dispatch.New(
-			vehicles.New(pool), drivers.New(pool), blockStore, dutyStore, agencyStore, auditWriter,
+			vehicleStore, driverStore, blockStore, dutyStore, agencyStore, auditWriter,
 		),
 	}
 	driverAPI := &handlers.Driver{
 		Agencies:  agencyStore,
 		Duty:      dutyStore,
 		Blocks:    blockStore,
-		Pings:     pings.New(pool),
-		Incidents: incidents.New(pool),
+		Pings:     pingStore,
+		Incidents: incidentStore,
+		Messages:  messageStore,
+	}
+	dispatchBoard := &handlers.DispatchBoard{
+		VehicleTrips: vehicleTripStore,
+		Drivers:      driverStore,
+		Vehicles:     vehicleStore,
+		Pings:        pingStore,
+		Duty:         dutyStore,
+		Blocks:       blockStore,
+		Incidents:    incidentStore,
+		Messages:     messageStore,
+		Audit:        auditWriter,
 	}
 
 	r := chi.NewRouter()
@@ -161,6 +179,14 @@ func main() {
 
 		r.Post("/admin/roster/expand", roster.ExpandRoster)
 
+		// Live dispatch board (Phase 9).
+		r.Get("/admin/dispatch/vehicles", dispatchBoard.ListVehicles)
+		r.Get("/admin/dispatch/alerts", dispatchBoard.GetAlerts)
+		r.Get("/admin/duty-assignments/{id}/pings", dispatchBoard.GetAssignmentPingTrace)
+		r.Post("/admin/duty-assignments/{id}/message", dispatchBoard.SendMessage)
+		r.Get("/admin/incidents", dispatchBoard.ListIncidents)
+		r.Post("/admin/incidents/{id}/resolve", dispatchBoard.ResolveIncident)
+
 		// Driver-app-scoped surface (Phase 7). Self-service only — every
 		// handler re-derives the target from the JWT, never a request param.
 		r.Get("/driver/agency", driverAPI.GetAgency)
@@ -170,6 +196,8 @@ func main() {
 		r.Post("/driver/duty/{id}/end", driverAPI.EndDuty)
 		r.Post("/driver/pings", driverAPI.SubmitPings)
 		r.Post("/driver/incidents", driverAPI.SubmitIncident)
+		r.Get("/driver/duty/{id}/messages", driverAPI.ListMessages)
+		r.Post("/driver/duty/{id}/messages/read", driverAPI.MarkMessagesRead)
 	})
 
 	slog.Info("transit api listening", "addr", addr)

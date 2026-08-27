@@ -4,6 +4,35 @@ import 'package:transit_telemetry/transit_telemetry.dart';
 import '../models/agency_info.dart';
 import '../models/duty_assignment.dart';
 
+/// A message from a dispatcher, from `/driver/duty/{id}/messages`.
+class DutyMessage {
+  const DutyMessage({required this.id, required this.body, required this.createdAt, this.readAt});
+  final String id;
+  final String body;
+  final DateTime createdAt;
+  final DateTime? readAt;
+
+  factory DutyMessage.fromJson(Map<String, dynamic> json) => DutyMessage(
+        id: json['id'] as String,
+        body: json['body'] as String,
+        createdAt: DateTime.parse(json['created_at'] as String),
+        readAt: json['read_at'] == null ? null : DateTime.parse(json['read_at'] as String),
+      );
+}
+
+/// The outcome of a ping-batch upload attempt. [ownershipLost] is distinct
+/// from a plain failure: it means the server rejected the batch because
+/// this assignment is no longer this driver's (a dispatcher reassigned or
+/// ended it mid-shift — brief §9's "driver app ... reflects the swap").
+/// A plain [PingSubmitResult.failure] just means try again later.
+enum PingSubmitOutcome { success, failure, ownershipLost }
+
+class PingSubmitResult {
+  const PingSubmitResult(this.outcome);
+  final PingSubmitOutcome outcome;
+  bool get ok => outcome == PingSubmitOutcome.success;
+}
+
 /// Calls the `/driver/*` endpoints in services/api/internal/httpapi/handlers/driver.go.
 class DriverApi {
   DriverApi(this._dio);
@@ -33,15 +62,20 @@ class DriverApi {
 
   Future<void> endDuty(String assignmentId) => _dio.post('/driver/duty/$assignmentId/end');
 
-  /// Uploads a batch of pings. Returns true only on a durable server accept
-  /// (2xx) — any other outcome (network error, 4xx/5xx) returns false so the
-  /// caller leaves the batch queued for retry.
-  Future<bool> submitPings(List<PingRecord> batch) async {
+  /// Uploads a batch of pings. A transient failure (network error, 5xx)
+  /// leaves the batch queued for retry; [PingSubmitOutcome.ownershipLost]
+  /// (403/409 — the assignment isn't this driver's open duty anymore) means
+  /// retrying is pointless and the caller should stop tracking.
+  Future<PingSubmitResult> submitPings(List<PingRecord> batch) async {
     try {
       await _dio.post('/driver/pings', data: {'pings': batch.map((p) => p.toJson()).toList()});
-      return true;
-    } on DioException {
-      return false;
+      return const PingSubmitResult(PingSubmitOutcome.success);
+    } on DioException catch (e) {
+      final status = e.response?.statusCode;
+      if (status == 403 || status == 409) {
+        return const PingSubmitResult(PingSubmitOutcome.ownershipLost);
+      }
+      return const PingSubmitResult(PingSubmitOutcome.failure);
     }
   }
 
@@ -54,4 +88,12 @@ class DriverApi {
       if (lon != null) 'lon': lon,
     });
   }
+
+  Future<List<DutyMessage>> listMessages(String assignmentId) async {
+    final res = await _dio.get<Map<String, dynamic>>('/driver/duty/$assignmentId/messages');
+    final items = (res.data!['items'] as List<dynamic>? ?? const []);
+    return items.map((e) => DutyMessage.fromJson(e as Map<String, dynamic>)).toList();
+  }
+
+  Future<void> markMessagesRead(String assignmentId) => _dio.post('/driver/duty/$assignmentId/messages/read');
 }

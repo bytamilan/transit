@@ -50,6 +50,7 @@ type CurrentPosition struct {
 	LastArrivedAt    *time.Time
 	LastDepartedAt   *time.Time
 	LastDelaySeconds *int
+	OffRoute         bool
 }
 
 // CurrentPositions returns one row per in-progress vehicle_trip for an
@@ -69,7 +70,7 @@ func (s *Store) CurrentPositions(ctx context.Context, agencyID uuid.UUID) ([]Cur
 		var p CurrentPosition
 		if err := rows.Scan(
 			&p.AssignmentID, &p.BlockID, &p.VehicleID, &p.TripID, &p.Lat, &p.Lon, &p.Heading, &p.Speed, &p.PingTS, &p.Occupancy,
-			&p.LastStopSequence, &p.LastArrivedAt, &p.LastDepartedAt, &p.LastDelaySeconds,
+			&p.LastStopSequence, &p.LastArrivedAt, &p.LastDepartedAt, &p.LastDelaySeconds, &p.OffRoute,
 		); err != nil {
 			return nil, fmt.Errorf("scan current vehicle position: %w", err)
 		}
@@ -93,4 +94,14 @@ func (s *Store) Upsert(ctx context.Context, p UpsertParams) (uuid.UUID, error) {
 		return uuid.Nil, fmt.Errorf("upsert vehicle trip: %w", err)
 	}
 	return id, nil
+}
+
+// SetOffRoute flags whether a vehicle trip is currently sustained off-route
+// — surfaced on the dispatch board and in alerts (brief §9).
+func (s *Store) SetOffRoute(ctx context.Context, agencyID, vehicleTripID uuid.UUID, offRoute bool) error {
+	if s.pool == nil {
+		return fmt.Errorf("vehicle trip store not connected to a database")
+	}
+	_, err := s.pool.Exec(ctx, `SELECT transit.set_vehicle_trip_off_route($1, $2, $3)`, agencyID, vehicleTripID, offRoute)
+	return err
 }

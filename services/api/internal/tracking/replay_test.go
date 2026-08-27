@@ -169,6 +169,40 @@ func TestReplayBlock_IncompleteTripLeavesLastStopUnresolved(t *testing.T) {
 	}
 }
 
+func TestReplayBlock_CurrentlyOffRouteFlagsASustainedLiveDiversion(t *testing.T) {
+	start := time.Date(2026, 3, 7, 6, 0, 0, 0, time.UTC)
+	stops := threeStops(start)
+	fixes := []Fix{
+		{TS: start, Lat: 1.000, Lon: 103.8},
+		{TS: start.Add(30 * time.Second), Lat: 1.000, Lon: 103.8},
+		{TS: start.Add(5 * time.Minute), Lat: 1.0005, Lon: 103.8},
+		// The vehicle is currently diverted, as of the latest fix.
+		{TS: start.Add(6 * time.Minute), Lat: 1.0006, Lon: 103.804},
+		{TS: start.Add(7 * time.Minute), Lat: 1.0007, Lon: 103.804},
+		{TS: start.Add(8 * time.Minute), Lat: 1.0008, Lon: 103.804},
+	}
+
+	result := ReplayBlock(ReplayInput{Stops: stops, Shape: straightShape(), Fixes: fixes})
+	if !result.CurrentlyOffRoute {
+		t.Error("expected CurrentlyOffRoute to be true for a sustained live diversion")
+	}
+}
+
+func TestReplayBlock_OnRouteIsNotCurrentlyOffRoute(t *testing.T) {
+	start := time.Date(2026, 3, 8, 6, 0, 0, 0, time.UTC)
+	stops := threeStops(start)
+	fixes := []Fix{
+		{TS: start, Lat: 1.000, Lon: 103.8},
+		{TS: start.Add(30 * time.Second), Lat: 1.000, Lon: 103.8},
+		{TS: start.Add(5 * time.Minute), Lat: 1.0005, Lon: 103.8},
+	}
+
+	result := ReplayBlock(ReplayInput{Stops: stops, Shape: straightShape(), Fixes: fixes})
+	if result.CurrentlyOffRoute {
+		t.Error("expected CurrentlyOffRoute to be false while cleanly on the shape")
+	}
+}
+
 func TestReplayBlock_EmptyInputsReturnEmptyResult(t *testing.T) {
 	result := ReplayBlock(ReplayInput{})
 	if len(result.StopEvents) != 0 || len(result.VehicleTrips) != 0 {

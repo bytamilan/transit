@@ -99,13 +99,34 @@ void _onStart(ServiceInstance service) async {
     // See above — degrade to raw-ping-only tracking.
   }
 
+  final notifications = FlutterLocalNotificationsPlugin();
+
   StreamSubscription<Position>? positionSub;
   Timer? flushTimer;
+  Timer? messageTimer;
 
   Future<void> stopTracking() async {
     await positionSub?.cancel();
     flushTimer?.cancel();
+    messageTimer?.cancel();
     await service.stopSelf();
+  }
+
+  /// The dispatcher ended or reassigned this duty out from under the driver
+  /// mid-shift (brief §9's "driver app ... reflects the swap"). Detected via
+  /// a 403/409 on ping submission rather than a push notification — there is
+  /// no FCM/APNs plumbing in this codebase. The driver must reopen the app
+  /// to pick up whatever duty (if any) is open for them now; this only
+  /// stops the stale tracking session and tells them why.
+  Future<void> handleOwnershipLost() async {
+    await recovery.setOpenAssignment(null);
+    await notifications.show(
+      notificationId + 1,
+      'Duty ended',
+      'Your duty was ended or reassigned by dispatch. Open the app to see your current status.',
+      const NotificationDetails(android: AndroidNotificationDetails(notificationChannelId, 'Transit Driver — On duty', importance: Importance.high)),
+    );
+    await stopTracking();
   }
 
   service.on('end_duty').listen((_) => stopTracking());
@@ -142,6 +163,33 @@ void _onStart(ServiceInstance service) async {
   });
 
   flushTimer = Timer.periodic(const Duration(seconds: 20), (_) async {
-    await engine.flush(driverApi.submitPings);
+    var lostOwnership = false;
+    await engine.flush((batch) async {
+      final result = await driverApi.submitPings(batch);
+      if (result.outcome == PingSubmitOutcome.ownershipLost) {
+        lostOwnership = true;
+      }
+      return result.ok;
+    });
+    if (lostOwnership) {
+      await handleOwnershipLost();
+    }
+  });
+
+  messageTimer = Timer.periodic(const Duration(seconds: 30), (_) async {
+    try {
+      final messages = await driverApi.listMessages(assignmentId);
+      final unread = messages.where((m) => m.readAt == null).toList();
+      if (unread.isEmpty) return;
+      await notifications.show(
+        notificationId + 2,
+        'Message from dispatch',
+        unread.length == 1 ? unread.first.body : '${unread.length} new messages from dispatch',
+        const NotificationDetails(android: AndroidNotificationDetails(notificationChannelId, 'Transit Driver — On duty', importance: Importance.high)),
+      );
+      await driverApi.markMessagesRead(assignmentId);
+    } catch (_) {
+      // Offline or a transient error — try again on the next tick.
+    }
   });
 }
