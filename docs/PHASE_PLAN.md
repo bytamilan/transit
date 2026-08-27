@@ -19,7 +19,7 @@
 | 8 | Server-side tracking → GTFS-RT | 🔵 |
 | 9 | Live dispatch board + alerts | 🔵 |
 | 10 | `manual` adapter + GTFS/GTFS-RT export | 🔵 |
-| 11 | RAPTOR planner, alerts, fares | ⚪ |
+| 11 | RAPTOR planner, alerts, fares | 🔵 |
 | 12 | Hardening & release | ⚪ |
 
 ---
@@ -683,22 +683,166 @@ or through the actual validator (see "Not yet verified" above).
 
 ---
 
-## Phase 11 — RAPTOR planner, service alerts, fares
+## Phase 11 — RAPTOR planner, service alerts, fares 🔵
 
 **Objective:** multimodal trip planning and rider-facing comms.
 
-**Tasks:**
-1. `internal/planner`: **RAPTOR** over the in-memory timetable
-   (time-dependent transfers done correctly); walking legs via self-hosted
-   OSRM/Valhalla or configured provider, cached by rounded coordinate pair.
-2. Itinerary ranking by ETA / transfers / walking / fare; localised output
-   (two locales in the gate).
-3. ServiceAlerts authoring in `/admin` → GTFS-RT ServiceAlerts + rider-app
-   banners; arrival alerts delivery.
-4. Fares: `fare_products` read path + fare display in itineraries.
+**Delivered:**
+1. `internal/planner` (new, DB-independent — `planner.Build` takes
+   already-decoded rows, so the algorithm is unit-testable with synthetic
+   timetables the same way `internal/tracking`'s `ReplayBlock` is): a
+   textbook round-based RAPTOR. Trips are grouped into stop-sequence
+   "patterns" (`Timetable.patterns`); each round only ever boards using the
+   *previous* round's frozen arrival times, never a value improved earlier
+   in the same round — the specific property that keeps multi-leg transfers
+   causally correct instead of allowing a boarded trip to depart before the
+   rider could have arrived. `TestPlan_NoTimeTravel` in
+   `internal/planner/raptor_test.go` exists specifically to pin this down:
+   it builds a network where a naive implementation would transfer onto a
+   trip that departs *before* the connecting trip arrives, and asserts
+   RAPTOR correctly skips it for the next feasible one. Nine more tests
+   cover direct trips, missed-earlier-trip boarding, cross-route transfers,
+   unreachable destinations, calendar/calendar_dates activation, and
+   coordinate-based origins/destinations. Walking legs
+   (`internal/planner/walk.go`'s `WalkCache`) are great-circle distance ÷ a
+   flat walking speed, cached by coordinate pair rounded to a ~11 m grid —
+   see the scope reduction below for why there's no routing engine behind
+   it. Migration `0015_planner_and_alerts.sql` adds `list_all_stop_times`
+   (a bulk read — one query for every stop_time in the agency, instead of
+   the per-trip `list_trip_stop_times` the public API and exporter already
+   use) and `internal/store/trips.Reader.ListAllStopTimes` to feed it.
+2. Itinerary ranking (`internal/planner/itinerary.go`'s `rank`): earliest
+   arrival first, then fewest transfers, then least walking, matching the
+   brief's ETA/transfers/walking ordering. `Planner` (the HTTP handler,
+   `internal/httpapi/handlers/planner.go`) builds one `Timetable` per
+   agency from the store readers and caches it in-process for 5 minutes
+   (no invalidation on admin writes — a documented staleness window, not a
+   correctness gap for a mostly-static schedule). `GET
+   /v0/agencies/{slug}/plan-trip` — hand-mounted, not OpenAPI-generated,
+   the same reasoning as GBFS/AgencyList/GTFS-RT (not part of the versioned
+   `/v0` contract, and the Dart client can't be regenerated without Docker,
+   unavailable all session).
+3. Service alerts: migration `0015` also adds the `service_alerts` table
+   (`header_text`/`description_text`/`url` are locale-keyed `jsonb`, the
+   same shape as `agencies.name`) plus SECURITY DEFINER
+   upsert/list/resolve/delete functions, RLS mirroring Phase 9's
+   `dispatch_messages` policy pattern. `internal/store/servicealerts` is
+   the Go store. `/admin/alerts` (`AdminAlerts` handler) is the authoring
+   surface — new `alerts:read`/`alerts:write` RBAC permissions granted to
+   `agency_admin`, `fleet_manager` and `dispatcher`; every mutation audited,
+   the `DispatchBoard`-style `h.audit(...)` pattern. `GET
+   /v0/agencies/{slug}/alerts` is the public read (`Alerts` handler),
+   resolving each alert's text to one locale via `?locale=` with an
+   "en" / alphabetically-first fallback (`selectLocale`, unit-tested for
+   determinism — Go map iteration order is otherwise randomized).
+   `internal/exporter/service_alerts.go`'s `ServiceAlertsFeed` replaces the
+   Phase 10 stub with a real GTFS-RT builder: one `TranslatedString`
+   translation per locale, cause/effect mapped onto the GTFS-RT enums, and
+   an `EntitySelector` per informed route/stop, or a single agency-wide
+   selector when an alert names neither. The portal gained an
+   `/admin/alerts` page (create form with a primary + one optional second
+   locale, list, resolve, delete) and the rider app gained an
+   `AlertBanner` widget on the home screen, fetched via a small hand-rolled
+   Dio client (`lib/providers/extra_api.dart`) since `plan-trip`/`alerts`
+   aren't in the generated `transit_api_client`.
+4. Fares: `GET /v0/agencies/{slug}/fares` (new `Fares` handler) exposes
+   `fare_products` publicly for the first time (the Phase 10 store already
+   existed but had no HTTP path). Every itinerary from `plan-trip` carries
+   the agency's full fare product list under `fare_products` — see the
+   scope reduction below for why this isn't a computed per-trip total.
+   Displayed in the rider app's itinerary tiles and referenced from
+   `internal/planner/fares.go`'s doc comment.
+5. Localization: a new `localeProvider` (Riverpod) in the rider app picks a
+   locale from the device locale intersected with the agency's configured
+   `locales`, falling back to `"en"` then the agency's first configured
+   locale — threaded into the `alerts` and `plan-trip` calls via
+   `?locale=`. `selectLocale` (Go) and `localeProvider` (Dart) are unit- and
+   analyzer-checked respectively; the gate's "two locales" is exercised by
+   `internal/exporter`'s `TestServiceAlertsFeed_TranslatesEveryLocale` and
+   the portal alert form's primary+second-locale fields.
+
+**Scope reductions, flagged:**
+- **No street-network walking routing.** There is no self-hosted
+  OSRM/Valhalla instance anywhere in `deploy/` or `services/`, and no
+  external routing provider is configured — `WalkCache` uses great-circle
+  distance over a flat walking speed instead, the same fallback
+  `internal/tracking` and the driver app's `DutyBlockLoader` already use
+  when shape data is missing. This under-estimates real walking time (no
+  streets, obstacles, detours) and is why the response never claims a
+  routed path, only a duration/distance.
+- **Fares are not computed per itinerary.** The schema has only
+  `fare_products` (id, name, amount, currency) — no GTFS-Fares V2
+  `fare_leg_rules`/`fare_transfer_rules` tables exist to map a specific set
+  of legs to a specific product. Every itinerary is annotated with the
+  agency's *entire* fare product list, not a computed total — "these are
+  the fares this agency charges," not "this trip costs X." Computing a
+  real total needs fare-rule data this codebase doesn't model.
+- **No push notifications for alerts ("arrival alerts delivery").** Same
+  gap as Phase 9's dispatcher↔driver messaging: no FCM/APNs plumbing
+  anywhere in this codebase. The rider app's `AlertBanner` is fetched on
+  screen load, not pushed.
+- **After-midnight service carryover isn't modelled across calendar
+  days.** `Timetable.activeServiceIDs` only activates services whose own
+  calendar entry covers the query date — a service that started the
+  previous day and is still running past midnight (e.g. a 25:30 GTFS
+  departure) is correctly reachable when querying *that* service's date,
+  but a query dated the next morning at 01:00 won't see it, since GTFS
+  ties the trip to the previous day's `service_id`. Documented directly on
+  `activeServiceIDs`'s doc comment.
+- **The RAPTOR timetable build has no pagination, and footpath relaxation
+  has no spatial index.** `maxTimetableRows = 1_000_000` (a `LIMIT`, same
+  precedent as the exporter's `maxExportRows`), and every footpath
+  relaxation pass checks every stop in the agency rather than querying a
+  spatial index — fine at any stop count this codebase has ever been
+  exercised against, not fine at real city-wide scale without further
+  work.
+- **The rider app has no real Flutter localization (ARB/`intl`)
+  pipeline.** `localeProvider` only decides which server-side locale key to
+  request; there's still no `flutter_localizations` setup, `.arb` files,
+  or `AppLocalizations` for the app's own UI chrome — an existing gap from
+  Phase 5 this phase didn't take on.
+
+**Not yet verified — needs a live Postgres (unavailable all session, same
+limitation as every phase since 6):** migration `0015` was never applied;
+`internal/store/servicealerts`, the bulk `ListAllStopTimes` reader, and
+`Planner.buildTimetable` were never run against a real database — only
+compile-checked via `go vet -tags integration ./...`. The rider app's
+`PlannerScreen` and `AlertBanner` were never run against a live API (no
+backend to point a `flutter run` at); `flutter analyze` and `flutter test`
+are both clean (5 pre-existing info-level lints, none new). `go build`,
+`go vet` (`-tags integration` too), `go test ./...` (RAPTOR's 10 tests plus
+new handler/exporter/RBAC tests all green), `gofmt -l`, `tsc --noEmit`, and
+`next build` for the portal are all green.
+
+**Tasks (original spec, for reference):**
+1. ~~`internal/planner`: RAPTOR... time-dependent transfers done
+   correctly; walking legs via self-hosted OSRM/Valhalla or configured
+   provider, cached by rounded coordinate pair~~ — RAPTOR delivered with a
+   dedicated no-time-travel test; walking legs delivered as great-circle
+   distance (no OSRM/Valhalla — see scope reductions), cached by rounded
+   coordinate pair as specified.
+2. ~~Itinerary ranking by ETA/transfers/walking/fare; localised output (two
+   locales in the gate)~~ — ranking delivered exactly as specified; fare is
+   attached but not part of the sort key (nothing to rank by — see scope
+   reductions). Localization delivered for alerts and the rider app's
+   locale selection, not for the planner's own generated text (there isn't
+   any — itinerary output is structured data, not narrative prose).
+3. ~~ServiceAlerts authoring in /admin → GTFS-RT ServiceAlerts + rider-app
+   banners; arrival alerts delivery~~ — authoring, the GTFS-RT feed, and
+   rider-app banners all delivered; "delivery" is banner-on-load, not push
+   (see scope reductions).
+4. ~~Fares: fare_products read path + fare display in itineraries~~ —
+   delivered as a flat per-agency list, not a computed per-trip total (see
+   scope reductions).
 
 **Gate:** a multi-leg trip is planned correctly in two locales, with fares
-shown per agency currency config.
+shown per agency currency config. **Partially met in this sandbox**: RAPTOR
+correctness (including the multi-leg no-time-travel property) is proven by
+unit tests against synthetic data; the "two locales" and "fares shown"
+halves are implemented and unit-tested (`TestServiceAlertsFeed_
+TranslatesEveryLocale`, itinerary fare-attachment tests) but never
+exercised end-to-end against a live agency's real timetable, since no
+Postgres was available this session.
 
 **Depends on:** Phases 4, 10.
 

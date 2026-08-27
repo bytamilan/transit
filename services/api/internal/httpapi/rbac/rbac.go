@@ -27,6 +27,8 @@ const (
 	PermDataRead     Permission = "data:read" // data_consumer / API-key scope
 	PermAdminRead    Permission = "admin:read"
 	PermAdminWrite   Permission = "admin:write"
+	PermAlertsRead   Permission = "alerts:read"
+	PermAlertsWrite  Permission = "alerts:write"
 )
 
 var allPermissions = []Permission{
@@ -34,6 +36,7 @@ var allPermissions = []Permission{
 	PermFleetRead, PermFleetWrite, PermDispatchRead, PermDispatchAct,
 	PermDriverRead, PermDriverWrite, PermAuditRead, PermAuditExport,
 	PermDataRead, PermAdminRead, PermAdminWrite,
+	PermAlertsRead, PermAlertsWrite,
 }
 
 // roleOrder defines a seniority ranking used by IsAtLeast. Higher is more
@@ -73,17 +76,21 @@ var matrix = map[string]map[Permission]struct{}{
 		PermDataRead:     {},
 		PermAdminRead:    {},
 		PermAdminWrite:   {},
+		PermAlertsRead:   {},
+		PermAlertsWrite:  {},
 	},
 	"fleet_manager": {
-		PermHealthRead:   {},
-		PermAgencyRead:   {},
-		PermFleetRead:    {},
-		PermFleetWrite:   {},
-		PermDriverRead:   {},
-		PermDriverWrite:  {},
-		PermAuditRead:    {},
-		PermDataRead:     {},
-		PermAdminRead:    {},
+		PermHealthRead:  {},
+		PermAgencyRead:  {},
+		PermFleetRead:   {},
+		PermFleetWrite:  {},
+		PermDriverRead:  {},
+		PermDriverWrite: {},
+		PermAuditRead:   {},
+		PermDataRead:    {},
+		PermAdminRead:   {},
+		PermAlertsRead:  {},
+		PermAlertsWrite: {},
 	},
 	"dispatcher": {
 		PermHealthRead:   {},
@@ -92,12 +99,14 @@ var matrix = map[string]map[Permission]struct{}{
 		PermDispatchAct:  {},
 		PermDriverRead:   {},
 		PermDataRead:     {},
+		PermAlertsRead:   {},
+		PermAlertsWrite:  {},
 	},
 	"driver": {
-		PermHealthRead: {},
-		PermDriverRead: {},
+		PermHealthRead:  {},
+		PermDriverRead:  {},
 		PermDriverWrite: {},
-		PermDataRead:   {},
+		PermDataRead:    {},
 	},
 	"data_consumer": {
 		PermDataRead: {},

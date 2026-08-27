@@ -23,9 +23,11 @@ import (
 	"github.com/bytamilan/transit/services/api/internal/store/dispatchmessages"
 	"github.com/bytamilan/transit/services/api/internal/store/drivers"
 	"github.com/bytamilan/transit/services/api/internal/store/duty"
+	"github.com/bytamilan/transit/services/api/internal/store/fareproducts"
 	"github.com/bytamilan/transit/services/api/internal/store/incidents"
 	"github.com/bytamilan/transit/services/api/internal/store/pings"
 	"github.com/bytamilan/transit/services/api/internal/store/routes"
+	"github.com/bytamilan/transit/services/api/internal/store/servicealerts"
 	"github.com/bytamilan/transit/services/api/internal/store/stopevents"
 	"github.com/bytamilan/transit/services/api/internal/store/stops"
 	"github.com/bytamilan/transit/services/api/internal/store/trips"
@@ -119,6 +121,16 @@ func main() {
 	}
 	gbfs := &handlers.GBFS{Agencies: agencyStore}
 	agencyList := &handlers.AgencyList{Agencies: agencyStore}
+	calendarStore := calendar.New(pool)
+	fareProductStore := fareproducts.New(pool)
+	alertStore := servicealerts.New(pool)
+	tripPlanner := &handlers.Planner{
+		Agencies: agencyStore, Stops: stops.New(pool), Routes: routeStore,
+		Trips: tripStore, Calendar: calendarStore, FareProducts: fareProductStore,
+	}
+	fares := &handlers.Fares{Agencies: agencyStore, Store: fareProductStore}
+	alerts := &handlers.Alerts{Agencies: agencyStore, Store: alertStore}
+	adminAlerts := &handlers.AdminAlerts{Alerts: alertStore, Audit: auditWriter}
 
 	r := chi.NewRouter()
 
@@ -146,6 +158,12 @@ func main() {
 		// Agency directory (Phase 10) — backs the portal's public /datasets
 		// page; not part of contracts/openapi.yaml, see AgencyList's doc comment.
 		r.Get("/v0/agencies", agencyList.List)
+
+		// Trip planner, fares and rider-facing alerts (Phase 11) — hand-mounted
+		// like everything above; see each handler's doc comment.
+		r.Get("/v0/agencies/{slug}/plan-trip", tripPlanner.PlanTrip)
+		r.Get("/v0/agencies/{slug}/fares", fares.List)
+		r.Get("/v0/agencies/{slug}/alerts", alerts.List)
 	})
 
 	// Authenticated admin surface (Phase 2 + Phase 6). Hand-rolled rather
@@ -205,6 +223,13 @@ func main() {
 		r.Post("/admin/duty-assignments/{id}/message", dispatchBoard.SendMessage)
 		r.Get("/admin/incidents", dispatchBoard.ListIncidents)
 		r.Post("/admin/incidents/{id}/resolve", dispatchBoard.ResolveIncident)
+
+		// Service alerts authoring (Phase 11).
+		r.Get("/admin/alerts", adminAlerts.ListAlerts)
+		r.Post("/admin/alerts", adminAlerts.CreateAlert)
+		r.Put("/admin/alerts/{id}", adminAlerts.UpdateAlert)
+		r.Post("/admin/alerts/{id}/resolve", adminAlerts.ResolveAlert)
+		r.Delete("/admin/alerts/{id}", adminAlerts.DeleteAlert)
 
 		// Driver-app-scoped surface (Phase 7). Self-service only — every
 		// handler re-derives the target from the JWT, never a request param.

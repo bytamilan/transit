@@ -154,6 +154,55 @@ func (r *Reader) ListStopTimes(ctx context.Context, agencyID uuid.UUID, tripID s
 	return out, nil
 }
 
+// TimetableStopTime is one stop_time row across every trip in an agency —
+// what internal/planner needs to build an in-memory RAPTOR timetable in one
+// query rather than one round-trip per trip (which is what ListStopTimes
+// and the exporter's per-trip loop do, and is fine at their scale but not
+// for a planner that needs the whole agency's timetable per request).
+// Arrival/DepartureSeconds are seconds since the service day's local noon
+// minus 12h (i.e. GTFS "noon minus 12h" midnight) — the same after-midnight
+// representation as the interval column itself (ADR 0002), just as an int
+// instead of a string since the planner does arithmetic on it, not display.
+type TimetableStopTime struct {
+	TripID           string
+	StopID           string
+	ArrivalSeconds   int
+	DepartureSeconds int
+	StopSequence     int
+	PickupType       *int
+	DropOffType      *int
+}
+
+// ListAllStopTimes returns every stop_time for every trip in the agency,
+// ordered by trip then stop sequence.
+func (r *Reader) ListAllStopTimes(ctx context.Context, agencyID uuid.UUID) ([]TimetableStopTime, error) {
+	if r.pool == nil {
+		return nil, fmt.Errorf("trips reader not connected to a database")
+	}
+	rows, err := r.pool.Query(ctx, `SELECT * FROM transit.list_all_stop_times($1)`, agencyID)
+	if err != nil {
+		return nil, fmt.Errorf("query all stop times: %w", err)
+	}
+	defer rows.Close()
+
+	var out []TimetableStopTime
+	for rows.Next() {
+		var st TimetableStopTime
+		var arr, dep pgtype.Interval
+		if err := rows.Scan(&st.TripID, &st.StopID, &arr, &dep, &st.StopSequence,
+			&st.PickupType, &st.DropOffType); err != nil {
+			return nil, fmt.Errorf("scan stop time: %w", err)
+		}
+		st.ArrivalSeconds = intervalSeconds(arr)
+		st.DepartureSeconds = intervalSeconds(dep)
+		out = append(out, st)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate all stop times: %w", err)
+	}
+	return out, nil
+}
+
 // Arrival is a static timetable arrival.
 type Arrival struct {
 	StopID               string
@@ -284,4 +333,13 @@ func intervalString(i pgtype.Interval) string {
 	m := int(d.Minutes()) % 60
 	s := int(d.Seconds()) % 60
 	return fmt.Sprintf("%02d:%02d:%02d", h, m, s)
+}
+
+// intervalSeconds is intervalString's numeric twin, for callers doing
+// arithmetic (the planner's timetable) rather than display.
+func intervalSeconds(i pgtype.Interval) int {
+	if !i.Valid {
+		return 0
+	}
+	return int(i.Microseconds / 1_000_000)
 }

@@ -27,6 +27,7 @@ import (
 	"github.com/bytamilan/transit/services/api/internal/store/calendar"
 	"github.com/bytamilan/transit/services/api/internal/store/fareproducts"
 	"github.com/bytamilan/transit/services/api/internal/store/routes"
+	"github.com/bytamilan/transit/services/api/internal/store/servicealerts"
 	"github.com/bytamilan/transit/services/api/internal/store/shapes"
 	"github.com/bytamilan/transit/services/api/internal/store/stops"
 	"github.com/bytamilan/transit/services/api/internal/store/trips"
@@ -63,7 +64,9 @@ func main() {
 	}
 
 	interval := parseDuration(envOr("EXPORT_INTERVAL", "15m"), 15*time.Minute)
-	svc := &exportService{sources: src, agencies: agencies.New(pool), dir: exportDir}
+	svc := &exportService{
+		sources: src, agencies: agencies.New(pool), alerts: servicealerts.New(pool), dir: exportDir,
+	}
 
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
@@ -85,6 +88,7 @@ func main() {
 type exportService struct {
 	sources  exporter.Sources
 	agencies *agencies.Reader
+	alerts   *servicealerts.Store
 	dir      string
 }
 
@@ -108,12 +112,31 @@ func (s *exportService) serveGTFSZip(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *exportService) serveServiceAlerts(w http.ResponseWriter, r *http.Request) {
-	data, err := proto.Marshal(exporter.EmptyServiceAlertsFeed(time.Now()))
+	slug := chi.URLParam(r, "slug")
+	agency, err := s.agencies.LookupBySlug(r.Context(), slug)
 	if err != nil {
-		slog.Error("marshal empty service alerts feed", "err", err)
+		w.WriteHeader(http.StatusNotFound)
+		return
+	}
+
+	rows, err := s.alerts.List(r.Context(), agency.ID, true)
+	if err != nil {
+		slog.Error("list service alerts", "agency", slug, "err", err)
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
+
+	feed := exporter.EmptyServiceAlertsFeed(time.Now())
+	if len(rows) > 0 {
+		feed = exporter.ServiceAlertsFeed(rows, slug, time.Now())
+	}
+	data, err := proto.Marshal(feed)
+	if err != nil {
+		slog.Error("marshal service alerts feed", "agency", slug, "err", err)
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set("X-Data-Source", "upstream")
 	w.Header().Set("Content-Type", "application/x-protobuf")
 	_, _ = w.Write(data)
 }

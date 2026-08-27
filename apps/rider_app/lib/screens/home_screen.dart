@@ -6,6 +6,8 @@ import 'package:transit_maps/transit_maps.dart';
 import '../providers/agency_provider.dart';
 import '../providers/api_provider.dart';
 import '../screens/about_screen.dart';
+import '../screens/planner_screen.dart';
+import '../widgets/alert_banner.dart';
 
 class HomeScreen extends ConsumerStatefulWidget {
   const HomeScreen({super.key});
@@ -44,6 +46,14 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         title: Text(agency.agency?.name['en'] ?? 'Transit'),
         actions: [
           IconButton(
+            icon: const Icon(Icons.directions),
+            tooltip: 'Plan a trip',
+            onPressed: () => Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => PlannerScreen(slug: agency.agencySlug ?? '')),
+            ),
+          ),
+          IconButton(
             icon: const Icon(Icons.info_outline),
             onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const AboutScreen())),
           ),
@@ -51,6 +61,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       ),
       body: Column(
         children: [
+          if (agency.agencySlug != null) AlertBanner(slug: agency.agencySlug!),
           Expanded(
             flex: 1,
             child: _map.buildMap(
