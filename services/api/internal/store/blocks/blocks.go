@@ -177,6 +177,41 @@ func (s *Store) TimeSpan(ctx context.Context, agencyID, blockID uuid.UUID) (*Spa
 	return &span, nil
 }
 
+// ScheduledStop is one stop in a block's concatenated stop sequence (across
+// every trip it runs, in order), with its scheduled instant already
+// converted per ADR 0002.
+type ScheduledStop struct {
+	TripID             string
+	StopID             string
+	StopSequence       int
+	Lat, Lon           float64
+	ScheduledArrival   time.Time
+	ScheduledDeparture time.Time
+}
+
+// Schedule returns a block's full stop sequence for map-matching and delay
+// computation (internal/tracking).
+func (s *Store) Schedule(ctx context.Context, agencyID, blockID uuid.UUID) ([]ScheduledStop, error) {
+	if err := s.checkPool(); err != nil {
+		return nil, err
+	}
+	rows, err := s.pool.Query(ctx, `SELECT * FROM transit.block_stop_schedule($1, $2)`, agencyID, blockID)
+	if err != nil {
+		return nil, fmt.Errorf("query block schedule: %w", err)
+	}
+	defer rows.Close()
+
+	var out []ScheduledStop
+	for rows.Next() {
+		var st ScheduledStop
+		if err := rows.Scan(&st.TripID, &st.StopID, &st.StopSequence, &st.Lat, &st.Lon, &st.ScheduledArrival, &st.ScheduledDeparture); err != nil {
+			return nil, fmt.Errorf("scan scheduled stop: %w", err)
+		}
+		out = append(out, st)
+	}
+	return out, rows.Err()
+}
+
 func scanBlock(rows pgx.Rows) (Block, error) {
 	var b Block
 	if err := rows.Scan(&b.ID, &b.BlockRef, &b.ServiceDate, &b.TripIDs, &b.CreatedAt, &b.UpdatedAt); err != nil {

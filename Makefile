@@ -26,7 +26,7 @@ DB_URL_DOCKER ?= postgres://postgres:$(POSTGRES_PASSWORD)@host.docker.internal:5
 PSQL := docker run --rm -e PGPASSWORD=$(POSTGRES_PASSWORD) -v "$(PWD)/infra/supabase:/infra/supabase" $(TEST_DB_IMAGE) psql
 TEST_PSQL := docker exec -e PGPASSWORD=$(TEST_DB_PASSWORD) transit-test-db psql
 
-.PHONY: help dev down logs lint test gen ingest.build ingest feedcheck db.migrate db.seed db.test portal.install portal.dev portal.build
+.PHONY: help dev down logs lint test gen ingest.build ingest feedcheck db.migrate db.seed db.test portal.install portal.dev portal.build tracker.build tracker
 
 help: ## Show this help
 	@grep -E '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-10s\033[0m %s\n", $$1, $$2}'
@@ -83,6 +83,12 @@ ingest.build: ## Build the ingestor and feedcheck binaries
 
 ingest: ingest.build ## Run the ingestor once with DATABASE_URL
 	cd services/api && DATABASE_URL="$(DB_URL)" ./bin/ingestor
+
+tracker.build: ## Build the tracker binary (Phase 8 background reprocessing)
+	cd services/api && go build -o bin/tracker ./cmd/tracker
+
+tracker: tracker.build ## Run the tracker once with DATABASE_URL
+	cd services/api && DATABASE_URL="$(DB_URL)" ./bin/tracker
 
 feedcheck: ingest.build ## Validate a single feed: make feedcheck adapter=gtfs_static url=...
 	@if [ -z "$(adapter)" ] || [ -z "$(url)" ]; then \

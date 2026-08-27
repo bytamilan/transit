@@ -52,6 +52,41 @@ type RangeAssignment struct {
 	Status      string
 }
 
+// OpenAssignment is one currently-open duty across every agency — what
+// cmd/tracker polls (internal/tracking is a platform-wide background
+// service, not scoped to a single agency's request).
+type OpenAssignment struct {
+	AgencyID     uuid.UUID
+	AssignmentID uuid.UUID
+	BlockID      uuid.UUID
+	DriverID     uuid.UUID
+	VehicleID    uuid.UUID
+	ServiceDate  time.Time
+}
+
+// ListOpenForTracking returns every duty assignment currently signed_on or
+// in_progress, across all agencies.
+func (s *Store) ListOpenForTracking(ctx context.Context) ([]OpenAssignment, error) {
+	if err := s.checkPool(); err != nil {
+		return nil, err
+	}
+	rows, err := s.pool.Query(ctx, `SELECT * FROM transit.list_open_duty_assignments_for_tracking()`)
+	if err != nil {
+		return nil, fmt.Errorf("query open duty assignments: %w", err)
+	}
+	defer rows.Close()
+
+	var out []OpenAssignment
+	for rows.Next() {
+		var a OpenAssignment
+		if err := rows.Scan(&a.AgencyID, &a.AssignmentID, &a.BlockID, &a.DriverID, &a.VehicleID, &a.ServiceDate); err != nil {
+			return nil, fmt.Errorf("scan open duty assignment: %w", err)
+		}
+		out = append(out, a)
+	}
+	return out, rows.Err()
+}
+
 // ListParams controls listing.
 type ListParams struct {
 	AgencyID    uuid.UUID

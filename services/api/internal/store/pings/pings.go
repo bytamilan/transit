@@ -1,6 +1,8 @@
-// Package pings inserts raw GPS pings from the driver app. Phase 8 owns
-// reading them back for map-matching and rollup — this package is
-// write-only from the driver app's perspective.
+// Package pings inserts raw GPS pings from the driver app and lets
+// internal/tracking (Phase 8) read them back for map-matching and rollup.
+// ListForAssignment is the *only* read path onto vehicle_pings anywhere in
+// this codebase — it must never be wired into an HTTP handler; raw pings
+// are a driver-surveillance dataset (brief §10) and stay server-internal.
 package pings
 
 import (
@@ -57,4 +59,51 @@ func (s *Store) InsertBatch(ctx context.Context, agencyID uuid.UUID, batch []Pin
 		}
 	}
 	return nil
+}
+
+// Fix is one raw ping read back for reprocessing.
+type Fix struct {
+	TS        time.Time
+	Lat, Lon  float64
+	Speed     *float64
+	AccuracyM *float64
+}
+
+// ListForAssignment returns every ping recorded for an assignment, oldest
+// first. See the package doc — this must stay internal-only.
+func (s *Store) ListForAssignment(ctx context.Context, agencyID, assignmentID uuid.UUID) ([]Fix, error) {
+	if s.pool == nil {
+		return nil, fmt.Errorf("ping store not connected to a database")
+	}
+	rows, err := s.pool.Query(ctx, `SELECT * FROM transit.list_pings_for_assignment($1, $2)`, agencyID, assignmentID)
+	if err != nil {
+		return nil, fmt.Errorf("query pings for assignment: %w", err)
+	}
+	defer rows.Close()
+
+	var out []Fix
+	for rows.Next() {
+		var f Fix
+		if err := rows.Scan(&f.TS, &f.Lat, &f.Lon, &f.Speed, &f.AccuracyM); err != nil {
+			return nil, fmt.Errorf("scan ping: %w", err)
+		}
+		out = append(out, f)
+	}
+	return out, rows.Err()
+}
+
+// PurgeOlderThan deletes raw pings older than retentionDays and returns how
+// many rows were removed (brief §8: "configurable raw retention, default 7
+// days"). cmd/tracker calls this on its own daily timer — see
+// docs/PHASE_PLAN.md Phase 8 for why this isn't a pg_cron job.
+func (s *Store) PurgeOlderThan(ctx context.Context, retentionDays int) (int64, error) {
+	if s.pool == nil {
+		return 0, fmt.Errorf("ping store not connected to a database")
+	}
+	var deleted int64
+	err := s.pool.QueryRow(ctx, `SELECT transit.purge_old_vehicle_pings($1)`, retentionDays).Scan(&deleted)
+	if err != nil {
+		return 0, fmt.Errorf("purge old vehicle pings: %w", err)
+	}
+	return deleted, nil
 }

@@ -25,9 +25,11 @@ import (
 	"github.com/bytamilan/transit/services/api/internal/store/incidents"
 	"github.com/bytamilan/transit/services/api/internal/store/pings"
 	"github.com/bytamilan/transit/services/api/internal/store/routes"
+	"github.com/bytamilan/transit/services/api/internal/store/stopevents"
 	"github.com/bytamilan/transit/services/api/internal/store/stops"
 	"github.com/bytamilan/transit/services/api/internal/store/trips"
 	"github.com/bytamilan/transit/services/api/internal/store/vehicles"
+	"github.com/bytamilan/transit/services/api/internal/store/vehicletrips"
 	"github.com/go-chi/chi/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
@@ -56,12 +58,21 @@ func main() {
 	agencyStore := agencies.New(pool)
 	routeStore := routes.New(pool)
 	tripStore := trips.New(pool)
+	blockStore := blocks.New(pool)
+	stopEventStore := stopevents.New(pool)
+	vehicleTripStore := vehicletrips.New(pool)
 	public := handlers.NewPublic(
 		agencyStore,
 		stops.New(pool),
 		routeStore,
 		tripStore,
+		stopEventStore,
 	)
+	gtfsrt := &handlers.GTFSRT{
+		Agencies:     agencyStore,
+		VehicleTrips: vehicleTripStore,
+		Blocks:       blockStore,
+	}
 
 	fleet := &handlers.Fleet{
 		Vehicles: vehicles.New(pool),
@@ -78,13 +89,13 @@ func main() {
 	dutyStore := duty.New(pool)
 	roster := &handlers.Roster{
 		Dispatch: dispatch.New(
-			vehicles.New(pool), drivers.New(pool), blocks.New(pool), dutyStore, agencyStore, auditWriter,
+			vehicles.New(pool), drivers.New(pool), blockStore, dutyStore, agencyStore, auditWriter,
 		),
 	}
 	driverAPI := &handlers.Driver{
 		Agencies:  agencyStore,
 		Duty:      dutyStore,
-		Blocks:    blocks.New(pool),
+		Blocks:    blockStore,
 		Pings:     pings.New(pool),
 		Incidents: incidents.New(pool),
 	}
@@ -93,6 +104,12 @@ func main() {
 
 	// Public read API generated from contracts/openapi.yaml (Phase 4).
 	r.Mount("/", oapi.Handler(public))
+
+	// GTFS-RT protobuf feeds (Phase 8). Public and unauthenticated like the
+	// rest of /v0, but hand-mounted rather than generated — see GTFSRT's
+	// doc comment for why.
+	r.Get("/v0/agencies/{slug}/gtfs-rt/vehicle-positions", gtfsrt.VehiclePositions)
+	r.Get("/v0/agencies/{slug}/gtfs-rt/trip-updates", gtfsrt.TripUpdates)
 
 	// Authenticated admin surface (Phase 2 + Phase 6). Hand-rolled rather
 	// than OpenAPI-generated — /admin is an internal operational surface, not

@@ -2,6 +2,7 @@
 package handlers
 
 import (
+	"context"
 	"log/slog"
 	"net/http"
 	"time"
@@ -9,6 +10,7 @@ import (
 	"github.com/bytamilan/transit/services/api/internal/generated/oapi"
 	"github.com/bytamilan/transit/services/api/internal/store/agencies"
 	"github.com/bytamilan/transit/services/api/internal/store/routes"
+	"github.com/bytamilan/transit/services/api/internal/store/stopevents"
 	"github.com/bytamilan/transit/services/api/internal/store/stops"
 	"github.com/bytamilan/transit/services/api/internal/store/trips"
 	"github.com/google/uuid"
@@ -19,15 +21,17 @@ import (
 // Public implements the generated oapi.ServerInterface for read-only public
 // endpoints. It resolves agency slug to agency_id on every request.
 type Public struct {
-	Agencies *agencies.Reader
-	Stops    *stops.Reader
-	Routes   *routes.Reader
-	Trips    *trips.Reader
+	Agencies   *agencies.Reader
+	Stops      *stops.Reader
+	Routes     *routes.Reader
+	Trips      *trips.Reader
+	StopEvents *stopevents.Store // optional: nil means arrivals stay static-only
 }
 
-// NewPublic wires the public handler.
-func NewPublic(a *agencies.Reader, s *stops.Reader, r *routes.Reader, t *trips.Reader) *Public {
-	return &Public{Agencies: a, Stops: s, Routes: r, Trips: t}
+// NewPublic wires the public handler. se may be nil (e.g. wiring order
+// before Phase 8), in which case arrivals fall back to static-only.
+func NewPublic(a *agencies.Reader, s *stops.Reader, r *routes.Reader, t *trips.Reader, se *stopevents.Store) *Public {
+	return &Public{Agencies: a, Stops: s, Routes: r, Trips: t, StopEvents: se}
 }
 
 // Healthz responds 200.
@@ -367,12 +371,38 @@ func (p *Public) ListArrivals(w http.ResponseWriter, r *http.Request, slug strin
 		return
 	}
 
+	predictions := p.loadPredictions(ctx, agency.ID, serviceDate)
+
 	writeJSON(w, http.StatusOK, oapi.ArrivalList{
-		Items:  toOAPIArrivals(items),
+		Items:  toOAPIArrivals(items, predictions),
 		Total:  &total,
 		Limit:  intPtr(limit),
 		Offset: intPtr(offset),
 	})
+}
+
+// loadPredictions layers Phase 8 realtime data onto the static timetable —
+// see toOAPIArrivals. Returns an empty map (not an error) on any failure or
+// when Phase 8 isn't wired up yet, since a missing prediction is always a
+// safe, valid fallback to the static schedule.
+func (p *Public) loadPredictions(ctx context.Context, agencyID uuid.UUID, serviceDate *time.Time) map[string]stopevents.LivePrediction {
+	if p.StopEvents == nil {
+		return nil
+	}
+	date := time.Now().UTC()
+	if serviceDate != nil {
+		date = *serviceDate
+	}
+	rows, err := p.StopEvents.ListLivePredictions(ctx, agencyID, date)
+	if err != nil {
+		slog.Error("load live predictions", "err", err)
+		return nil
+	}
+	out := make(map[string]stopevents.LivePrediction, len(rows))
+	for _, r := range rows {
+		out[predictionKey(r.TripID, r.StopID)] = r
+	}
+	return out
 }
 
 func intOrDefault(v *int, d int) int {

@@ -11,6 +11,7 @@ import (
 	"github.com/bytamilan/transit/services/api/internal/generated/oapi"
 	"github.com/bytamilan/transit/services/api/internal/store/agencies"
 	"github.com/bytamilan/transit/services/api/internal/store/routes"
+	"github.com/bytamilan/transit/services/api/internal/store/stopevents"
 	"github.com/bytamilan/transit/services/api/internal/store/stops"
 	"github.com/bytamilan/transit/services/api/internal/store/trips"
 	"github.com/bytamilan/transit/services/api/internal/testutil"
@@ -24,6 +25,7 @@ func TestPublicAPI_ReadsDemoAgency(t *testing.T) {
 		stops.New(pool),
 		routes.New(pool),
 		trips.New(pool),
+		stopevents.New(pool),
 	)
 
 	r := chi.NewRouter()

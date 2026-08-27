@@ -298,8 +298,11 @@ paths:
       operationId: listArrivals
       summary: List upcoming arrivals for an agency
       description: >-
-        Returns static timetable arrivals. Realtime predictions will be layered
-        on top in Phase 8.
+        Returns timetable arrivals, layered with server-computed realtime
+        predictions where available (Phase 8) — the same numbers the GTFS-RT
+        TripUpdates feed publishes, so surfaces never disagree. Falls back to
+        the static arrival_time/departure_time alone when no realtime data
+        exists yet for a row.
       security: []
       parameters:
         - name: slug
@@ -618,6 +621,27 @@ components:
           type: integer
         wheelchair_accessible:
           type: integer
+        predicted_arrival_time:
+          type: string
+          format: date-time
+          description: >-
+            Server-computed prediction (Phase 8), when available: an actual
+            measured arrival for a completed stop, or a live estimate for an
+            in-progress trip. Absent when no realtime data exists yet, in
+            which case only the static arrival_time applies.
+        predicted_departure_time:
+          type: string
+          format: date-time
+        delay_seconds:
+          type: integer
+          description: Positive is late, negative is early, 0 is on time.
+        confidence:
+          type: string
+          enum: [high, medium, low]
+          description: >-
+            How the prediction was derived — high (direct geofence
+            confirmation), medium (interpolated from a normal-density trace)
+            or low (interpolated across a signal gap, or while off-route).
 
     ArrivalList:
       type: object

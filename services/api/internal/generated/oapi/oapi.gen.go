@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/oapi-codegen/runtime"
@@ -46,6 +47,27 @@ func (e AgencyConfigMapProvider) Valid() bool {
 	case Maplibre:
 		return true
 	case Protomaps:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ArrivalConfidence.
+const (
+	High   ArrivalConfidence = "high"
+	Low    ArrivalConfidence = "low"
+	Medium ArrivalConfidence = "medium"
+)
+
+// Valid indicates whether the value is a known member of the ArrivalConfidence enum.
+func (e ArrivalConfidence) Valid() bool {
+	switch e {
+	case High:
+		return true
+	case Low:
+		return true
+	case Medium:
 		return true
 	default:
 		return false
@@ -95,16 +117,29 @@ type AgencyLicense struct {
 
 // Arrival defines model for Arrival.
 type Arrival struct {
-	ArrivalTime          string  `json:"arrival_time"`
-	DepartureTime        string  `json:"departure_time"`
-	RouteId              string  `json:"route_id"`
-	RouteShortName       *string `json:"route_short_name,omitempty"`
-	StopId               string  `json:"stop_id"`
-	StopSequence         int     `json:"stop_sequence"`
-	TripHeadsign         *string `json:"trip_headsign,omitempty"`
-	TripId               string  `json:"trip_id"`
-	WheelchairAccessible *int    `json:"wheelchair_accessible,omitempty"`
+	ArrivalTime string `json:"arrival_time"`
+
+	// Confidence How the prediction was derived — high (direct geofence confirmation), medium (interpolated from a normal-density trace) or low (interpolated across a signal gap, or while off-route).
+	Confidence *ArrivalConfidence `json:"confidence,omitempty"`
+
+	// DelaySeconds Positive is late, negative is early, 0 is on time.
+	DelaySeconds  *int   `json:"delay_seconds,omitempty"`
+	DepartureTime string `json:"departure_time"`
+
+	// PredictedArrivalTime Server-computed prediction (Phase 8), when available: an actual measured arrival for a completed stop, or a live estimate for an in-progress trip. Absent when no realtime data exists yet, in which case only the static arrival_time applies.
+	PredictedArrivalTime   *time.Time `json:"predicted_arrival_time,omitempty"`
+	PredictedDepartureTime *time.Time `json:"predicted_departure_time,omitempty"`
+	RouteId                string     `json:"route_id"`
+	RouteShortName         *string    `json:"route_short_name,omitempty"`
+	StopId                 string     `json:"stop_id"`
+	StopSequence           int        `json:"stop_sequence"`
+	TripHeadsign           *string    `json:"trip_headsign,omitempty"`
+	TripId                 string     `json:"trip_id"`
+	WheelchairAccessible   *int       `json:"wheelchair_accessible,omitempty"`
 }
+
+// ArrivalConfidence How the prediction was derived — high (direct geofence confirmation), medium (interpolated from a normal-density trace) or low (interpolated across a signal gap, or while off-route).
+type ArrivalConfidence string
 
 // ArrivalList defines model for ArrivalList.
 type ArrivalList struct {

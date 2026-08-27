@@ -16,7 +16,7 @@
 | 5 | Rider app | ✅ |
 | 6 | Admin console: fleet, drivers, duty assignment | 🔵 |
 | 7 | Driver app: always-on shell + telemetry | 🔵 |
-| 8 | Server-side tracking → GTFS-RT | ⚪ |
+| 8 | Server-side tracking → GTFS-RT | 🔵 |
 | 9 | Live dispatch board + alerts | ⚪ |
 | 10 | `manual` adapter + GTFS/GTFS-RT export | ⚪ |
 | 11 | RAPTOR planner, alerts, fares | ⚪ |
@@ -386,29 +386,86 @@ and foreground-service correctness are gate items, not nice-to-haves.
 
 ---
 
-## Phase 8 — Server-side tracking: map-matching, stop events, delay → GTFS-RT
+## Phase 8 — Server-side tracking: map-matching, stop events, delay → GTFS-RT 🔵
 
 **Objective:** authoritative realtime, computed server-side from raw pings.
 
-**Tasks:**
+**Delivered:**
+1. `internal/tracking` (pure Go, no DB dependency, 16 unit tests):
+   `ReplayBlock` re-derives stop arrivals/departures/delay from a raw ping
+   trace independently of anything the driver app computed — a Go port of
+   the same map-matching approach as `transit_telemetry`, not a shared
+   implementation, per the brief's "never trust client-derived data" rule.
+   Confidence is `high` (direct geofence hit), `medium` (interpolated across
+   a normal-density trace) or `low` (interpolated across a signal gap
+   exceeding 3 minutes, or while sustained off-route ≥150m for ≥3 fixes).
+   `PropagateDelay` decays a measured delay geometrically for live
+   downstream-stop predictions. The replay-harness gate item is
+   `replay_test.go`, including the tunnel/urban-canyon fixture.
+2. Migration `0012_tracking.sql`: `vehicle_trips` (one row per GTFS trip
+   actually run within a duty) and `stop_events` (the authoritative
+   arrival/departure/delay/confidence record), plus SECURITY DEFINER
+   helpers — `block_stop_schedule` (per-stop scheduled instants, ADR 0002),
+   `list_pings_for_assignment` (internal-only raw-trace read),
+   `current_vehicle_positions` (narrow, position-only read for GTFS-RT),
+   `list_live_predictions` (feeds the public arrivals endpoint), and
+   `purge_old_vehicle_pings`.
+3. `cmd/tracker`: a second background service (mirrors `cmd/ingestor`'s
+   two-process shape) that ticks `internal/tracking.Service` over every
+   open duty assignment platform-wide, and separately purges pings past the
+   retention window daily.
+4. GTFS-RT `VehiclePositions`/`TripUpdates` protobuf feeds at
+   `/v0/agencies/{slug}/gtfs-rt/{vehicle-positions,trip-updates}` — public,
+   unauthenticated, hand-mounted (not OpenAPI-generated: oapi-codegen's
+   chi-server generation is JSON-first and doesn't model a raw protobuf
+   response well).
+5. The `/v0/agencies/{slug}/arrivals` endpoint (Phase 4's explicit forward
+   reference: "Realtime predictions will be layered on top in Phase 8") now
+   layers `predicted_arrival_time` / `predicted_departure_time` /
+   `delay_seconds` / `confidence` onto the static timetable when a resolved
+   `stop_event` exists — the contract, Go server types and handler were
+   updated and regenerated via `oapi-codegen` (available locally); the
+   generated Dart client was **not** regenerated (`make gen`'s Dart step
+   needs Docker, unavailable in this sandbox — see below).
+6. A dedicated privacy test (`privacy_test.go`) asserts the gate's "raw
+   pings unreachable" requirement across the public router, `/admin` and
+   `/driver`, at every role.
+
+**Scope reduction — daily partitioning:** the brief calls for daily
+partitions on `vehicle_pings`. This wasn't implemented: converting an
+existing table to a partitioned one means dropping and recreating it, and
+doing that blind (no live Postgres to verify against in this sandbox) was
+judged too risky for a mechanism the gate doesn't actually exercise.
+Retention is real (`cmd/tracker`'s daily purge), just not partitioned —
+genuine follow-up work, not silently dropped scope.
+
+**Not yet verified — needs a live Postgres and load test:** same
+limitation as Phases 6–7 — Docker was unavailable, so migration
+`0012_tracking.sql` has not been run, and the brief's "load test in-phase"
+risk-mitigation for ping volume hasn't been attempted at all. `go build`,
+`go vet` (including `-tags integration`) and `go test -short ./...` are all
+green, and the replay harness — the part of this phase closest to a
+correctness proof — is fully unit tested without needing a database.
+
+**Tasks (original spec, for reference):**
 1. ~~`vehicle_pings` ingestion endpoint~~ — delivered in Phase 7
    (`POST /driver/pings`, migration `0011_telemetry.sql`) since the driver
    app needed somewhere to flush to. Batched and RLS'd as specified; not yet
    idempotent against retried batches (Phase 7 punted that to here, see its
    `Store.InsertBatch` doc comment) — add idempotency here if duplicate
    pings from a retried flush turn out to matter for the map-matching math.
-2. Hot-table ops: daily partitions, configurable raw retention (default 7
-   days), rollup into `stop_events` + speed profiles (§8).
-3. `internal/tracking`: re-run map-matching and stop detection over the raw
-   trace; emit `stop_events` with `confidence` and `derived_by`; client
-   results treated as hints only.
-4. Delay computation vs `stop_times`, downstream propagation with decay;
-   off-route handling marks predictions low-confidence.
-5. GTFS-RT publishers: VehiclePositions (`current_status` /
-   `current_stop_sequence` per spec enums) and TripUpdates — **the same
-   numbers served to the rider app**, so surfaces never disagree.
-6. Replay harness: recorded traces → expected arrival times; tunnel/urban-
-   canyon fixture asserting staleness behaviour.
+2. Hot-table ops: retention delivered (`cmd/tracker`'s daily purge, default
+   7 days); daily partitioning and the rollup-into-speed-profiles half are
+   not — see "Scope reduction" above.
+3. ~~`internal/tracking`~~ — delivered (`ReplayBlock`).
+4. ~~Delay computation vs `stop_times`, downstream propagation with
+   decay~~ — delivered (`ReplayBlock`'s per-stop delay, `PropagateDelay`).
+   Off-route handling delivered as a confidence downgrade, not yet as a
+   dispatcher notification — that's Phase 9's dispatch board.
+5. ~~GTFS-RT publishers~~ — delivered (`VehiclePositionsFeed`,
+   `TripUpdatesFeed`).
+6. ~~Replay harness~~ — delivered (`replay_test.go`, including the
+   tunnel/urban-canyon fixture).
 
 **Gate:** a replayed trace produces correct arrival times within tolerance;
 raw pings unreachable from any public endpoint or rider view (tested).

@@ -34,11 +34,26 @@ services:
   ingestor:
     build:
       context: ../../services/api
-    command: ["/app/ingestor"]
+    command: ["/ingestor"]
     environment:
       DATABASE_URL: postgres://postgres:${POSTGRES_PASSWORD:-postgres}@db:5432/${POSTGRES_DB:-postgres}?sslmode=disable&search_path=transit,public,extensions,auth
       LOG_LEVEL: ${LOG_LEVEL:-info}
       RELOAD_INTERVAL: ${RELOAD_INTERVAL:-5m}
+    depends_on:
+      db:
+        condition: service_healthy
+
+  # Phase 8: reprocesses open duties' raw ping traces into authoritative
+  # stop_events/vehicle_trips, and purges pings past the retention window.
+  tracker:
+    build:
+      context: ../../services/api
+    command: ["/tracker"]
+    environment:
+      DATABASE_URL: postgres://postgres:${POSTGRES_PASSWORD:-postgres}@db:5432/${POSTGRES_DB:-postgres}?sslmode=disable&search_path=transit,public,extensions,auth
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      TRACKER_TICK_INTERVAL: ${TRACKER_TICK_INTERVAL:-15s}
+      VEHICLE_PINGS_RETENTION_DAYS: ${VEHICLE_PINGS_RETENTION_DAYS:-7}
     depends_on:
       db:
         condition: service_healthy

@@ -5,6 +5,7 @@ import (
 
 	"github.com/bytamilan/transit/services/api/internal/generated/oapi"
 	"github.com/bytamilan/transit/services/api/internal/store/routes"
+	"github.com/bytamilan/transit/services/api/internal/store/stopevents"
 	"github.com/bytamilan/transit/services/api/internal/store/stops"
 	"github.com/bytamilan/transit/services/api/internal/store/trips"
 )
@@ -94,10 +95,13 @@ func toOAPIStopTimes(items []trips.StopTime) []oapi.StopTime {
 	return out
 }
 
-func toOAPIArrivals(items []trips.Arrival) []oapi.Arrival {
+// toOAPIArrivals merges static timetable arrivals with server-computed
+// realtime predictions (Phase 8) where one exists for the same trip/stop —
+// predictions is keyed by predictionKey(tripID, stopID).
+func toOAPIArrivals(items []trips.Arrival, predictions map[string]stopevents.LivePrediction) []oapi.Arrival {
 	out := make([]oapi.Arrival, len(items))
 	for i, a := range items {
-		out[i] = oapi.Arrival{
+		arrival := oapi.Arrival{
 			StopId:               a.StopID,
 			TripId:               a.TripID,
 			RouteId:              a.RouteID,
@@ -108,8 +112,22 @@ func toOAPIArrivals(items []trips.Arrival) []oapi.Arrival {
 			StopSequence:         a.StopSequence,
 			WheelchairAccessible: a.WheelchairAccessible,
 		}
+		if p, ok := predictions[predictionKey(a.TripID, a.StopID)]; ok {
+			arrival.PredictedArrivalTime = p.ArrivedAt
+			arrival.PredictedDepartureTime = p.DepartedAt
+			arrival.DelaySeconds = p.DelaySeconds
+			if p.Confidence != nil {
+				c := oapi.ArrivalConfidence(*p.Confidence)
+				arrival.Confidence = &c
+			}
+		}
+		out[i] = arrival
 	}
 	return out
+}
+
+func predictionKey(tripID, stopID string) string {
+	return tripID + "|" + stopID
 }
 
 func configFromMap(m map[string]any) (oapi.AgencyConfig, error) {
