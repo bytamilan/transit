@@ -1,0 +1,13 @@
+aws_region         = "eu-west-1"
+environment        = "staging"
+availability_zones = ["eu-west-1a", "eu-west-1b"]
+
+node_desired_size = 3
+node_min_size     = 2
+node_max_size     = 6
+
+backup_retention_days = 30
+
+tags = {
+  Owner = "platform-team"
+}

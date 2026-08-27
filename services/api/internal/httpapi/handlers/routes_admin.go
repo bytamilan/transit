@@ -1,6 +1,8 @@
 package handlers
 
 import (
+	"context"
+	"log/slog"
 	"net/http"
 	"time"
 
@@ -8,6 +10,7 @@ import (
 
 	"github.com/bytamilan/transit/services/api/internal/httpapi/auth"
 	"github.com/bytamilan/transit/services/api/internal/httpapi/rbac"
+	"github.com/bytamilan/transit/services/api/internal/store/audit"
 	"github.com/bytamilan/transit/services/api/internal/store/calendar"
 	"github.com/bytamilan/transit/services/api/internal/store/routes"
 	"github.com/bytamilan/transit/services/api/internal/store/trips"
@@ -16,11 +19,25 @@ import (
 // RouteEditor implements the Phase 6.4 admin write endpoints for routes,
 // trips, stop sequences and service calendars — the write path behind the
 // future manual adapter (Phase 10). Edits go straight to the canonical GTFS
-// tables; there is no separate draft/publish step.
+// tables; there is no separate draft/publish step. Every mutation is
+// audited (Phase 12 security review against build brief §12's "every admin
+// mutation lands in an append-only audit log" — this handler was the one
+// admin write surface in the codebase that never wired Audit).
 type RouteEditor struct {
 	Routes   *routes.Reader
 	Trips    *trips.Reader
 	Calendar *calendar.Reader
+	Audit    *audit.Writer
+}
+
+func (h *RouteEditor) audit(actor auth.Actor, action, entity string, before, after map[string]any) {
+	if h.Audit == nil {
+		return
+	}
+	entry := audit.Entry{AgencyID: actor.AgencyID, ActorID: actor.UserID, Action: action, Entity: entity, Before: before, After: after, IP: actor.IP}
+	if err := h.Audit.Write(context.Background(), entry); err != nil {
+		slog.Error("route editor: failed to write audit log entry", "action", action, "entity", entity, "err", err)
+	}
 }
 
 type routeInput struct {
@@ -73,6 +90,7 @@ func (h *RouteEditor) UpsertRoute(w http.ResponseWriter, r *http.Request) {
 		internalError(w, "upsert route", err)
 		return
 	}
+	h.audit(actor, "upsert", "routes", nil, map[string]any{"route_id": in.RouteID})
 	w.WriteHeader(http.StatusNoContent)
 }
 
@@ -91,6 +109,7 @@ func (h *RouteEditor) DeleteRoute(w http.ResponseWriter, r *http.Request) {
 		internalError(w, "delete route", err)
 		return
 	}
+	h.audit(actor, "delete", "routes", map[string]any{"route_id": routeID}, nil)
 	w.WriteHeader(http.StatusNoContent)
 }
 
@@ -154,6 +173,7 @@ func (h *RouteEditor) UpsertCalendar(w http.ResponseWriter, r *http.Request) {
 		internalError(w, "upsert calendar", err)
 		return
 	}
+	h.audit(actor, "upsert", "calendar", nil, map[string]any{"service_id": in.ServiceID})
 	w.WriteHeader(http.StatusNoContent)
 }
 
@@ -211,6 +231,7 @@ func (h *RouteEditor) UpsertTrip(w http.ResponseWriter, r *http.Request) {
 		internalError(w, "upsert trip", err)
 		return
 	}
+	h.audit(actor, "upsert", "trips", nil, map[string]any{"trip_id": in.TripID, "route_id": in.RouteID})
 	w.WriteHeader(http.StatusNoContent)
 }
 
@@ -229,6 +250,7 @@ func (h *RouteEditor) DeleteTrip(w http.ResponseWriter, r *http.Request) {
 		internalError(w, "delete trip", err)
 		return
 	}
+	h.audit(actor, "delete", "trips", map[string]any{"trip_id": tripID}, nil)
 	w.WriteHeader(http.StatusNoContent)
 }
 
@@ -269,5 +291,6 @@ func (h *RouteEditor) ReplaceTripStopTimes(w http.ResponseWriter, r *http.Reques
 		internalError(w, "replace stop times", err)
 		return
 	}
+	h.audit(actor, "replace_stop_times", "trips", nil, map[string]any{"trip_id": tripID, "stop_count": len(in.StopTimes)})
 	w.WriteHeader(http.StatusNoContent)
 }

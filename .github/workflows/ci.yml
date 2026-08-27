@@ -1,0 +1,134 @@
+name: CI
+
+# Phase 0 flagged this as a follow-up ("CI workflow file — pending token
+# with workflow scope") and it stayed unaddressed through Phase 11 for the
+# same reason: this session's git remote push never had the `workflow`
+# OAuth scope needed to push files under .github/workflows/. Writing this
+# file is unaffected by that (it's a local commit, no push involved this
+# session) — the file itself has never run on a real GitHub Actions
+# runner. Treat it as reviewed-but-unexecuted, the same posture as every
+# other Phase 12 deploy artifact.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  go:
+    name: Go build/vet/test
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: supabase/postgres:15.8.1.044
+        env:
+          POSTGRES_PASSWORD: postgres
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: services/api/go.mod
+      - name: go build
+        working-directory: services/api
+        run: go build ./...
+      - name: go vet
+        working-directory: services/api
+        run: |
+          go vet ./...
+          go vet -tags integration ./...
+      - name: gofmt check
+        working-directory: services/api
+        run: |
+          fmt_out="$(gofmt -l .)"
+          if [ -n "$fmt_out" ]; then
+            echo "$fmt_out"
+            echo "::error::gofmt found unformatted files — run 'gofmt -w .'"
+            exit 1
+          fi
+      - name: go test (unit, no DB)
+        working-directory: services/api
+        run: go test -short ./...
+      - name: migrate + seed + integration tests
+        working-directory: services/api
+        env:
+          MIGRATE_URL: postgres://postgres:postgres@localhost:5432/postgres?sslmode=disable&search_path=transit,public,extensions,auth
+          TEST_URL: postgres://transit_app:transit_app@localhost:5432/postgres?sslmode=disable&search_path=transit,public,extensions,auth
+        run: |
+          go build -o bin/migrate ./cmd/migrate
+          DATABASE_URL="$MIGRATE_URL" MIGRATIONS_DIR="$(pwd)/../../infra/supabase/migrations" ./bin/migrate up
+          PGPASSWORD=postgres psql "postgres://postgres:postgres@localhost:5432/postgres?sslmode=disable" \
+            -f "$(pwd)/../../infra/supabase/seed/demo_agencies.sql"
+          DATABASE_URL="$TEST_URL" go test -tags integration ./internal/store/... ./internal/adapters/... ./internal/httpapi/... ./internal/exporter/...
+
+  portal:
+    name: Portal typecheck + build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with: { version: 9 }
+      - uses: actions/setup-node@v4
+        with: { node-version: 20, cache: pnpm }
+      - run: pnpm -C apps/portal install --frozen-lockfile
+      - run: pnpm -C apps/portal typecheck
+      - run: pnpm -C apps/portal build
+
+  flutter:
+    name: Flutter analyze + test (driver_app, rider_app)
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        app: [driver_app, rider_app]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with: { channel: stable }
+      - run: flutter pub get
+        working-directory: apps/${{ matrix.app }}
+      - run: flutter analyze
+        working-directory: apps/${{ matrix.app }}
+      - run: flutter test
+        working-directory: apps/${{ matrix.app }}
+
+  compose-config:
+    name: docker compose config check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: |
+          cp .env.example .env
+          docker compose -f deploy/compose/compose.yaml --env-file .env config >/dev/null
+
+  openapi-lint:
+    name: OpenAPI lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: npx --yes @redocly/cli@latest lint contracts/openapi.yaml
+
+  gen-check:
+    # ubuntu-latest ships Docker pre-installed, so this runs the full `make
+    # gen` (Go server types via oapi-codegen + the Dart client via the
+    # openapi-generator-cli container) — the one regeneration step this
+    # session could never verify locally (no Docker all session).
+    name: Generated code drift check
+    runs-on: ubuntu-latest
+    needs: [go]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: services/api/go.mod
+      - name: install oapi-codegen
+        run: go install github.com/oapi-codegen/oapi-codegen/v2/cmd/oapi-codegen@latest
+      - run: make gen-check

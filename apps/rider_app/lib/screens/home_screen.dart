@@ -5,8 +5,10 @@ import 'package:transit_api_client/transit_api_client.dart';
 import 'package:transit_maps/transit_maps.dart';
 import '../providers/agency_provider.dart';
 import '../providers/api_provider.dart';
+import '../providers/locale_provider.dart';
 import '../screens/about_screen.dart';
 import '../screens/planner_screen.dart';
+import '../utils/localized_name.dart';
 import '../widgets/alert_banner.dart';
 
 class HomeScreen extends ConsumerStatefulWidget {
@@ -40,10 +42,12 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   @override
   Widget build(BuildContext context) {
     final agency = ref.watch(agencyProvider);
+    final locale = ref.watch(localeProvider);
+    final title = agency.agency != null ? localizedName(agency.agency!.name.toMap(), locale) : 'Transit';
 
     return Scaffold(
       appBar: AppBar(
-        title: Text(agency.agency?.name['en'] ?? 'Transit'),
+        title: Text(title.isNotEmpty ? title : 'Transit'),
         actions: [
           IconButton(
             icon: const Icon(Icons.directions),

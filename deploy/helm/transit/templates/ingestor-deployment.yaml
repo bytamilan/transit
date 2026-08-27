@@ -1,0 +1,30 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "transit.fullname" . }}-ingestor
+  labels:
+    {{- include "transit.labels" . | nindent 4 }}
+    app.kubernetes.io/component: ingestor
+spec:
+  # See values.yaml's comment on ingestor.replicaCount — do not scale this
+  # beyond 1 without making internal/ingest.Scheduler leader-elected first.
+  replicas: {{ .Values.ingestor.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "transit.selectorLabels" (dict "Release" .Release "component" "ingestor") | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "transit.selectorLabels" (dict "Release" .Release "component" "ingestor") | nindent 8 }}
+    spec:
+      containers:
+        - name: ingestor
+          image: {{ include "transit.image" . }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          command: ["/ingestor"]
+          env:
+            {{- include "transit.commonEnv" . | nindent 12 }}
+            - name: RELOAD_INTERVAL
+              value: {{ .Values.config.reloadInterval | quote }}
+          resources:
+            {{- toYaml .Values.ingestor.resources | nindent 12 }}

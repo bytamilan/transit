@@ -1,0 +1,57 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "transit.fullname" . }}-portal
+  labels:
+    {{- include "transit.labels" . | nindent 4 }}
+    app.kubernetes.io/component: portal
+spec:
+  replicas: {{ .Values.portal.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "transit.selectorLabels" (dict "Release" .Release "component" "portal") | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "transit.selectorLabels" (dict "Release" .Release "component" "portal") | nindent 8 }}
+    spec:
+      containers:
+        - name: portal
+          image: "{{ .Values.portalImage.repository }}:{{ .Values.portalImage.tag | default $.Chart.AppVersion }}"
+          imagePullPolicy: {{ .Values.portalImage.pullPolicy }}
+          ports:
+            - containerPort: 3000
+          env:
+            - name: PORT
+              value: "3000"
+            - name: NEXT_PUBLIC_API_BASE_URL
+              value: {{ .Values.portal.env.nextPublicApiBaseUrl | quote }}
+            - name: NEXT_PUBLIC_EXPORTER_BASE_URL
+              value: {{ .Values.portal.env.nextPublicExporterBaseUrl | quote }}
+            - name: NEXT_PUBLIC_SUPABASE_URL
+              value: {{ .Values.portal.env.nextPublicSupabaseUrl | quote }}
+            - name: NEXT_PUBLIC_SUPABASE_ANON_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.secrets.existingSecret }}
+                  key: SUPABASE_ANON_KEY
+          readinessProbe:
+            httpGet: { path: /login, port: 3000 }
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          resources:
+            {{- toYaml .Values.portal.resources | nindent 12 }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "transit.fullname" . }}-portal
+  labels:
+    {{- include "transit.labels" . | nindent 4 }}
+    app.kubernetes.io/component: portal
+spec:
+  selector:
+    {{- include "transit.selectorLabels" (dict "Release" .Release "component" "portal") | nindent 4 }}
+  ports:
+    - port: {{ .Values.portal.service.port }}
+      targetPort: 3000

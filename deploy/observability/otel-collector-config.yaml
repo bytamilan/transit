@@ -1,0 +1,48 @@
+# Reference OpenTelemetry Collector config for Transit's traces.
+# See deploy/observability/README.md — never run in this session (no
+# Docker), so treat this as a documented starting point, not a validated
+# deployment artifact.
+#
+# Point every Transit binary at this collector via:
+#   OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector:4318
+
+receivers:
+  otlp:
+    protocols:
+      http:
+        endpoint: 0.0.0.0:4318
+      grpc:
+        endpoint: 0.0.0.0:4317
+
+processors:
+  batch:
+    timeout: 5s
+    send_batch_size: 512
+  # Drops high-cardinality attributes before export — vehicle_id/trip_id
+  # show up on tracker/exporter spans and are fine for local debugging but
+  # would blow up cardinality on a hosted tracing backend at fleet scale.
+  attributes/scrub:
+    actions:
+      - key: db.statement
+        action: delete
+
+exporters:
+  # Always-on: confirms the collector is receiving spans at all, without
+  # needing a real backend configured yet.
+  debug:
+    verbosity: basic
+
+  # Uncomment and point at a real backend once one exists. Any
+  # OTLP-compatible backend works (Tempo, Jaeger, Honeycomb, etc.) — this
+  # is the Tempo example.
+  # otlp/tempo:
+  #   endpoint: tempo:4317
+  #   tls:
+  #     insecure: true
+
+service:
+  pipelines:
+    traces:
+      receivers: [otlp]
+      processors: [batch, attributes/scrub]
+      exporters: [debug] # add otlp/tempo (or your backend) here once configured

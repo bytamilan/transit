@@ -7,6 +7,7 @@ import (
 	"net"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/bytamilan/transit/services/api/internal/store/apikeys"
 	"github.com/google/uuid"
@@ -43,13 +44,21 @@ func WithUsageRecorder(fn func(ctx context.Context, keyID uuid.UUID, endpoint st
 	return func(m *Middleware) { m.recordUsage = fn }
 }
 
+// apiKeyLookup is the subset of *apikeys.Store the middleware needs —
+// narrowed to an interface so apiKeyActor's rate-limit/quota logic can be
+// unit-tested with a fake, without a live database.
+type apiKeyLookup interface {
+	Lookup(ctx context.Context, hash string) (*apikeys.Key, error)
+	CountUsageSince(ctx context.Context, keyID uuid.UUID, since time.Time) (int, error)
+}
+
 // Middleware authenticates requests and stores an Actor in the request context.
 type Middleware struct {
-	cfg        Config
-	db         *pgxpool.Pool
-	set        jwk.Set
-	keys       *apikeys.Store
-	limiter    *TokenBucket
+	cfg         Config
+	db          *pgxpool.Pool
+	set         jwk.Set
+	keys        apiKeyLookup
+	limiter     *TokenBucket
 	recordUsage func(ctx context.Context, keyID uuid.UUID, endpoint string, status, latencyMs int) error
 }
 
@@ -89,13 +98,46 @@ func NewMiddleware(cfg Config, db *pgxpool.Pool, opts ...MiddlewareOption) (*Mid
 	return m, nil
 }
 
-// Handler wraps next with authentication.
+// Handler wraps next with authentication. API-key requests also get their
+// usage recorded (Phase 12: usage_events existed since Phase 4 but nothing
+// ever wrote to it from the request path — RecordUsage was configured on
+// every Middleware but never called). Recording happens in a background
+// goroutine after the response is written, so a slow usage-event insert
+// never adds latency to the caller's request.
 func (m *Middleware) Handler(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		ctx := r.Context()
 		actor := m.authenticate(ctx, r)
-		next.ServeHTTP(w, r.WithContext(WithActor(ctx, actor)))
+
+		if !actor.IsAPIKey || m.recordUsage == nil {
+			next.ServeHTTP(w, r.WithContext(WithActor(ctx, actor)))
+			return
+		}
+
+		started := time.Now()
+		sw := &statusWriter{ResponseWriter: w, status: http.StatusOK}
+		next.ServeHTTP(sw, r.WithContext(WithActor(ctx, actor)))
+
+		keyID, endpoint, status := actor.UserID, r.URL.Path, sw.status
+		latencyMs := int(time.Since(started).Milliseconds())
+		go func() {
+			if err := m.recordUsage(context.Background(), keyID, endpoint, status, latencyMs); err != nil {
+				slog.Error("auth: failed to record usage event", "key_id", keyID, "err", err)
+			}
+		}()
 	})
+}
+
+// statusWriter captures the status code written by the handler, since
+// http.ResponseWriter doesn't expose it after the fact.
+type statusWriter struct {
+	http.ResponseWriter
+	status int
+}
+
+func (w *statusWriter) WriteHeader(status int) {
+	w.status = status
+	w.ResponseWriter.WriteHeader(status)
 }
 
 func (m *Middleware) authenticate(ctx context.Context, r *http.Request) Actor {
@@ -216,7 +258,20 @@ func (m *Middleware) apiKeyActor(ctx context.Context, key string) (Actor, bool) 
 	}
 
 	if m.limiter != nil {
-		if !m.limiter.Allow(k.ID.String()) {
+		if !m.limiter.Allow(k.ID.String(), k.RateLimitRPM) {
+			return Actor{}, false
+		}
+	}
+
+	if k.QuotaDaily > 0 {
+		used, err := m.keys.CountUsageSince(ctx, k.ID, apikeys.UsageWindowStart())
+		if err != nil {
+			// Fail closed on read errors would take down every API-key
+			// caller on a transient DB hiccup for a feature whose whole
+			// point is protecting against overuse, not availability — log
+			// and let the request through instead.
+			slog.Error("auth: failed to check daily quota, allowing request", "key_id", k.ID, "err", err)
+		} else if used >= k.QuotaDaily {
 			return Actor{}, false
 		}
 	}

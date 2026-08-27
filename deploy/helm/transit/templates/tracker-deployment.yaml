@@ -1,0 +1,30 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "transit.fullname" . }}-tracker
+  labels:
+    {{- include "transit.labels" . | nindent 4 }}
+    app.kubernetes.io/component: tracker
+spec:
+  replicas: {{ .Values.tracker.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "transit.selectorLabels" (dict "Release" .Release "component" "tracker") | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "transit.selectorLabels" (dict "Release" .Release "component" "tracker") | nindent 8 }}
+    spec:
+      containers:
+        - name: tracker
+          image: {{ include "transit.image" . }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          command: ["/tracker"]
+          env:
+            {{- include "transit.commonEnv" . | nindent 12 }}
+            - name: TRACKER_TICK_INTERVAL
+              value: {{ .Values.config.trackerTickInterval | quote }}
+            - name: VEHICLE_PINGS_RETENTION_DAYS
+              value: {{ .Values.config.vehiclePingsRetentionDays | quote }}
+          resources:
+            {{- toYaml .Values.tracker.resources | nindent 12 }}

@@ -3,10 +3,12 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:transit_design/transit_design.dart';
 import 'providers/agency_provider.dart';
+import 'providers/locale_provider.dart';
 import 'screens/agency_select_screen.dart';
 import 'screens/home_screen.dart';
 import 'screens/route_screen.dart';
 import 'screens/stop_screen.dart';
+import 'utils/localized_name.dart';
 
 class RiderApp extends ConsumerWidget {
   const RiderApp({super.key});
@@ -14,6 +16,7 @@ class RiderApp extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final agency = ref.watch(agencyProvider);
+    final locale = ref.watch(localeProvider);
     final branding = agency.config?.branding;
     final theme = branding != null
         ? AgencyTheme.fromJson({
@@ -24,10 +27,12 @@ class RiderApp extends ConsumerWidget {
           })
         : const AgencyTheme(primary: '#1976D2', secondary: '#FFC107');
 
+    final title = agency.agency != null ? localizedName(agency.agency!.name.toMap(), locale) : 'Transit';
+
     return ThemeProvider(
       agencyTheme: theme,
       child: MaterialApp.router(
-        title: agency.agency?.name['en'] ?? 'Transit',
+        title: title.isNotEmpty ? title : 'Transit',
         theme: theme.toTheme(),
         routerConfig: _router,
       ),

@@ -1,0 +1,79 @@
+name: GTFS validation
+
+# Closes the build brief §12 non-negotiable "Generated GTFS passes
+# MobilityData validation in CI" — open since Phase 3, and finally
+# addressable once CI itself exists (Phase 12). Never run against a real
+# GitHub Actions runner this session (no CI runner available in this
+# sandbox) — reviewed but unexecuted, same as this repo's other Phase 12
+# deploy artifacts.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    paths:
+      - "infra/supabase/migrations/**"
+      - "infra/supabase/seed/**"
+      - "services/api/internal/exporter/**"
+      - "services/api/cmd/exporter/**"
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: supabase/postgres:15.8.1.044
+        env:
+          POSTGRES_PASSWORD: postgres
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: services/api/go.mod
+
+      - name: migrate + seed demo agency
+        working-directory: services/api
+        env:
+          MIGRATE_URL: postgres://postgres:postgres@localhost:5432/postgres?sslmode=disable&search_path=transit,public,extensions,auth
+        run: |
+          go build -o bin/migrate ./cmd/migrate
+          DATABASE_URL="$MIGRATE_URL" MIGRATIONS_DIR="$(pwd)/../../infra/supabase/migrations" ./bin/migrate up
+          PGPASSWORD=postgres psql "postgres://postgres:postgres@localhost:5432/postgres?sslmode=disable" \
+            -f "$(pwd)/../../infra/supabase/seed/demo_agencies.sql"
+
+      - name: build a GTFS.zip for demo-metro
+        working-directory: services/api
+        env:
+          DATABASE_URL: postgres://postgres:postgres@localhost:5432/postgres?sslmode=disable&search_path=transit,public,extensions,auth
+        run: |
+          go build -o bin/exporter ./cmd/exporter
+          mkdir -p /tmp/exports
+          EXPORT_DIR=/tmp/exports EXPORT_INTERVAL=1h EXPORTER_ADDR=:8090 ./bin/exporter &
+          EXPORTER_PID=$!
+          for i in $(seq 1 30); do
+            [ -f /tmp/exports/demo-metro.zip ] && break
+            sleep 1
+          done
+          kill $EXPORTER_PID
+          test -f /tmp/exports/demo-metro.zip
+
+      - name: MobilityData gtfs-validator
+        run: |
+          docker run --rm \
+            -v /tmp/exports:/data \
+            -v /tmp/gtfs-validator-report:/report \
+            ghcr.io/mobilitydata/gtfs-validator:latest \
+            --input /data/demo-metro.zip --output_base /report
+
+      - name: upload validation report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: gtfs-validator-report
+          path: /tmp/gtfs-validator-report

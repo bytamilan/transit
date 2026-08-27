@@ -1,0 +1,87 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "transit.fullname" . }}-exporter
+  labels:
+    {{- include "transit.labels" . | nindent 4 }}
+    app.kubernetes.io/component: exporter
+spec:
+  replicas: {{ .Values.exporter.replicaCount }}
+  strategy:
+    {{- if gt (.Values.exporter.replicaCount | int) 1 }}
+    type: RollingUpdate
+    {{- else }}
+    type: Recreate
+    {{- end }}
+  selector:
+    matchLabels:
+      {{- include "transit.selectorLabels" (dict "Release" .Release "component" "exporter") | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "transit.selectorLabels" (dict "Release" .Release "component" "exporter") | nindent 8 }}
+    spec:
+      containers:
+        - name: exporter
+          image: {{ include "transit.image" . }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          command: ["/exporter"]
+          ports:
+            - containerPort: 8090
+          env:
+            {{- include "transit.commonEnv" . | nindent 12 }}
+            - name: EXPORTER_ADDR
+              value: {{ .Values.config.exporterAddr | quote }}
+            - name: EXPORT_INTERVAL
+              value: {{ .Values.config.exportInterval | quote }}
+            - name: EXPORT_DIR
+              value: {{ .Values.config.exportDir | quote }}
+          readinessProbe:
+            httpGet: { path: /healthz, port: 8090 }
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          resources:
+            {{- toYaml .Values.exporter.resources | nindent 12 }}
+          {{- if .Values.exporter.persistence.enabled }}
+          volumeMounts:
+            - name: exports
+              mountPath: {{ .Values.config.exportDir }}
+          {{- end }}
+      {{- if .Values.exporter.persistence.enabled }}
+      volumes:
+        - name: exports
+          persistentVolumeClaim:
+            claimName: {{ include "transit.fullname" . }}-exporter-data
+      {{- end }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "transit.fullname" . }}-exporter
+  labels:
+    {{- include "transit.labels" . | nindent 4 }}
+    app.kubernetes.io/component: exporter
+spec:
+  selector:
+    {{- include "transit.selectorLabels" (dict "Release" .Release "component" "exporter") | nindent 4 }}
+  ports:
+    - port: {{ .Values.exporter.service.port }}
+      targetPort: 8090
+{{- if .Values.exporter.persistence.enabled }}
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ include "transit.fullname" . }}-exporter-data
+  labels:
+    {{- include "transit.labels" . | nindent 4 }}
+    app.kubernetes.io/component: exporter
+spec:
+  accessModes: [{{ .Values.exporter.persistence.accessMode }}]
+  {{- if .Values.exporter.persistence.storageClassName }}
+  storageClassName: {{ .Values.exporter.persistence.storageClassName }}
+  {{- end }}
+  resources:
+    requests:
+      storage: {{ .Values.exporter.persistence.size }}
+{{- end }}

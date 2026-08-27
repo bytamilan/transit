@@ -1,0 +1,96 @@
+{
+  "title": "Transit Operations",
+  "uid": "transit-operations",
+  "schemaVersion": 39,
+  "version": 1,
+  "timezone": "utc",
+  "time": { "from": "now-24h", "to": "now" },
+  "refresh": "1m",
+  "templating": {
+    "list": [
+      {
+        "name": "DS_POSTGRES",
+        "type": "datasource",
+        "query": "postgres",
+        "label": "Postgres datasource"
+      }
+    ]
+  },
+  "panels": [
+    {
+      "id": 1,
+      "title": "API latency (p50 / p95) by endpoint",
+      "type": "timeseries",
+      "datasource": { "type": "postgres", "uid": "${DS_POSTGRES}" },
+      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 0 },
+      "targets": [
+        {
+          "refId": "A",
+          "format": "time_series",
+          "rawSql": "SELECT date_trunc('hour', ts) AS time, endpoint, percentile_cont(0.5) WITHIN GROUP (ORDER BY latency_ms) AS p50_ms, percentile_cont(0.95) WITHIN GROUP (ORDER BY latency_ms) AS p95_ms FROM transit.usage_events WHERE ts > now() - interval '24 hours' GROUP BY 1, 2 ORDER BY 1",
+          "rawQuery": true
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "title": "API error rate (status >= 400)",
+      "type": "timeseries",
+      "datasource": { "type": "postgres", "uid": "${DS_POSTGRES}" },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 8 },
+      "targets": [
+        {
+          "refId": "A",
+          "format": "time_series",
+          "rawSql": "SELECT date_trunc('hour', ts) AS time, count(*) FILTER (WHERE status >= 400) AS errors, count(*) AS total FROM transit.usage_events WHERE ts > now() - interval '24 hours' GROUP BY 1 ORDER BY 1",
+          "rawQuery": true
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "title": "Feed sync outcomes by adapter",
+      "type": "timeseries",
+      "datasource": { "type": "postgres", "uid": "${DS_POSTGRES}" },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 8 },
+      "targets": [
+        {
+          "refId": "A",
+          "format": "time_series",
+          "rawSql": "SELECT date_trunc('hour', started_at) AS time, adapter || ':' || status AS metric, count(*) AS value FROM transit.sync_runs WHERE started_at > now() - interval '24 hours' GROUP BY 1, 2 ORDER BY 1",
+          "rawQuery": true
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "title": "Feed quarantine events",
+      "type": "table",
+      "datasource": { "type": "postgres", "uid": "${DS_POSTGRES}" },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 16 },
+      "targets": [
+        {
+          "refId": "A",
+          "format": "table",
+          "rawSql": "SELECT created_at, agency_id, error FROM transit.feed_quarantine WHERE created_at > now() - interval '24 hours' ORDER BY created_at DESC LIMIT 100",
+          "rawQuery": true
+        }
+      ]
+    },
+    {
+      "id": 5,
+      "title": "API key daily quota headroom",
+      "type": "table",
+      "datasource": { "type": "postgres", "uid": "${DS_POSTGRES}" },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 16 },
+      "targets": [
+        {
+          "refId": "A",
+          "format": "table",
+          "rawSql": "SELECT k.label, k.quota_daily, count(u.id) AS used_today, k.quota_daily - count(u.id) AS remaining FROM transit.api_keys k LEFT JOIN transit.usage_events u ON u.api_key_id = k.id AND u.ts >= date_trunc('day', now()) WHERE k.revoked_at IS NULL AND k.quota_daily > 0 GROUP BY k.id, k.label, k.quota_daily ORDER BY remaining ASC",
+          "rawQuery": true
+        }
+      ]
+    }
+  ]
+}

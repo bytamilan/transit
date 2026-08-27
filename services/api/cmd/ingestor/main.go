@@ -17,6 +17,7 @@ import (
 	"github.com/bytamilan/transit/services/api/internal/store/routes"
 	"github.com/bytamilan/transit/services/api/internal/store/stops"
 	"github.com/bytamilan/transit/services/api/internal/store/trips"
+	"github.com/bytamilan/transit/services/api/internal/telemetry"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -25,6 +26,24 @@ func main() {
 	var lvl slog.Level
 	_ = lvl.UnmarshalText([]byte(logLevel))
 	slog.SetDefault(slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{Level: lvl})))
+
+	// SDK/exporter wiring only — no explicit spans around the scheduler's
+	// per-feed sync loop (internal/ingest.Scheduler), unlike tracker's and
+	// exporter's per-tick spans, since that needs instrumenting the
+	// scheduler's internals rather than main.go. Documented in
+	// docs/PHASE_PLAN.md Phase 12 as a scope reduction.
+	shutdownTelemetry, err := telemetry.Setup(context.Background(), "transit-ingestor")
+	if err != nil {
+		slog.Error("failed to set up telemetry", "err", err)
+		os.Exit(1)
+	}
+	defer func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		if err := shutdownTelemetry(ctx); err != nil {
+			slog.Error("telemetry shutdown failed", "err", err)
+		}
+	}()
 
 	dsn := envOr("DATABASE_URL", "")
 	if dsn == "" {

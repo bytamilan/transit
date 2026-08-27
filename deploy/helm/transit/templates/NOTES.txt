@@ -1,0 +1,36 @@
+Transit is installed as release {{ .Release.Name }} in namespace {{ .Release.Namespace }}.
+
+Before this chart is usable, create the secret it references
+({{ .Values.secrets.existingSecret }}) with at least:
+  DATABASE_URL, JWT_SECRET, SUPABASE_ANON_KEY
+and optionally:
+  GOTRUE_ADMIN_URL, SUPABASE_SERVICE_ROLE_KEY
+
+  kubectl create secret generic {{ .Values.secrets.existingSecret }} \
+    --from-literal=DATABASE_URL='postgres://...' \
+    --from-literal=JWT_SECRET='...' \
+    --from-literal=SUPABASE_ANON_KEY='...'
+
+Apply migrations before the API deployment serves traffic — this chart does
+not run them for you (see docs/runbooks/migrations.md):
+
+  DATABASE_URL=... ./bin/migrate up
+
+{{- if .Values.ingress.enabled }}
+
+Once DNS points at your ingress controller:
+  API:      https://{{ .Values.ingress.api.host }}
+  Exporter: https://{{ .Values.ingress.exporter.host }}
+  Portal:   https://{{ .Values.ingress.portal.host }}
+{{- else }}
+
+Ingress is disabled (ingress.enabled=false) — port-forward to reach the
+services, e.g.:
+  kubectl port-forward svc/{{ include "transit.fullname" . }}-api {{ .Values.api.service.port }}:{{ .Values.api.service.port }}
+{{- end }}
+
+This chart was authored but never installed against a real cluster in the
+session that wrote it (no Docker/Kubernetes available) — see
+deploy/helm/README.md and docs/PHASE_PLAN.md Phase 12 before relying on it
+for a production rollout without a dry run first (`helm template` / `helm
+install --dry-run`).

@@ -1,0 +1,102 @@
+# Default values for the transit chart. Override per environment with
+# -f values-staging.yaml / --set.
+
+image:
+  # The API/ingestor/tracker/exporter binaries all ship in one image
+  # (services/api/Dockerfile builds all four; each Deployment below
+  # overrides `command` to select the binary — the same pattern
+  # deploy/compose/compose.yaml already uses).
+  repository: ghcr.io/example/transit-api
+  tag: "" # defaults to .Chart.AppVersion
+  pullPolicy: IfNotPresent
+
+portalImage:
+  repository: ghcr.io/example/transit-portal
+  tag: ""
+  pullPolicy: IfNotPresent
+
+# Non-secret configuration, mounted as env vars into every workload via a
+# ConfigMap. Secrets (DATABASE_URL, JWT_SECRET, SUPABASE_SERVICE_ROLE_KEY)
+# are NOT set here — see secrets.existingSecret below.
+config:
+  logLevel: info
+  apiAddr: ":8080"
+  exporterAddr: ":8090"
+  exportInterval: 15m
+  exportDir: /data/exports
+  reloadInterval: 5m
+  trackerTickInterval: 15s
+  vehiclePingsRetentionDays: "7"
+  otelExporterOTLPEndpoint: "" # empty = stdout trace exporter (see internal/telemetry)
+  otelTracesSamplerArg: "1.0"
+
+# Secrets are deliberately NOT templated with values here — a values.yaml
+# committed to git is the wrong place for DATABASE_URL/JWT_SECRET. Create
+# the secret out-of-band (kubectl create secret generic, or your secret
+# manager's Kubernetes integration) with these keys, and reference it here:
+#   DATABASE_URL, JWT_SECRET, GOTRUE_ADMIN_URL, SUPABASE_SERVICE_ROLE_KEY
+secrets:
+  existingSecret: transit-secrets
+
+api:
+  replicaCount: 2
+  resources:
+    requests: { cpu: 100m, memory: 128Mi }
+    limits: { cpu: 500m, memory: 256Mi }
+  service:
+    port: 8080
+
+ingestor:
+  replicaCount: 1 # a second replica would double-poll every feed — see internal/ingest's scheduler doc comment
+  resources:
+    requests: { cpu: 50m, memory: 64Mi }
+    limits: { cpu: 250m, memory: 128Mi }
+
+tracker:
+  replicaCount: 1 # ditto — ProcessOpenAssignments isn't idempotent-safe across concurrent runs
+  resources:
+    requests: { cpu: 50m, memory: 64Mi }
+    limits: { cpu: 250m, memory: 128Mi }
+
+exporter:
+  replicaCount: 1
+  resources:
+    requests: { cpu: 100m, memory: 128Mi }
+    limits: { cpu: 500m, memory: 256Mi }
+  service:
+    port: 8090
+  # GTFS.zip output needs to survive pod restarts and be visible from every
+  # replica if you ever scale this beyond 1 — a ReadWriteMany volume (e.g.
+  # an NFS-backed StorageClass, EFS on EKS) is required if replicaCount > 1.
+  persistence:
+    enabled: true
+    size: 1Gi
+    storageClassName: ""
+    accessMode: ReadWriteOnce
+
+portal:
+  replicaCount: 2
+  resources:
+    requests: { cpu: 100m, memory: 128Mi }
+    limits: { cpu: 500m, memory: 256Mi }
+  service:
+    port: 3000
+  env:
+    nextPublicApiBaseUrl: "https://api.transit.example"
+    nextPublicExporterBaseUrl: "https://exports.transit.example"
+    nextPublicSupabaseUrl: "https://auth.transit.example"
+    # NEXT_PUBLIC_SUPABASE_ANON_KEY comes from secrets.existingSecret, not here.
+
+ingress:
+  enabled: false
+  className: ""
+  annotations: {}
+  api:
+    host: api.transit.example
+  exporter:
+    host: exports.transit.example
+  portal:
+    host: admin.transit.example
+  tls: []
+  # - secretName: transit-tls
+  #   hosts: [api.transit.example, exports.transit.example, admin.transit.example]

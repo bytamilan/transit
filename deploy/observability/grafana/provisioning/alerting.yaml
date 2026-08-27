@@ -1,0 +1,129 @@
+# Grafana-managed alert rules (provisioning-as-code), not Prometheus
+# Alertmanager rules — the signal source is Postgres, not a Prometheus
+# scrape target (see deploy/observability/README.md). Drop this into
+# Grafana's /etc/grafana/provisioning/alerting/ directory.
+#
+# REPLACE_WITH_DATASOURCE_UID: swap for your Postgres datasource's UID
+# before provisioning — Grafana rejects a rule referencing an unknown
+# datasource.
+
+apiVersion: 1
+
+groups:
+  - orgId: 1
+    name: transit-operations
+    folder: Transit
+    interval: 5m
+    rules:
+      - uid: transit-sync-failure-spike
+        title: "Feed sync failure spike"
+        condition: C
+        for: 0m
+        data:
+          - refId: A
+            relativeTimeRange: { from: 900, to: 0 }
+            datasourceUid: REPLACE_WITH_DATASOURCE_UID
+            model:
+              format: table
+              rawSql: >-
+                SELECT adapter, count(*) AS failures
+                FROM transit.sync_runs
+                WHERE status = 'failed' AND started_at > now() - interval '15 minutes'
+                GROUP BY adapter
+                HAVING count(*) > 3
+              rawQuery: true
+          - refId: C
+            datasourceUid: "__expr__"
+            model:
+              type: threshold
+              expression: A
+              conditions:
+                - evaluator: { type: gt, params: [0] }
+        annotations:
+          summary: "One or more adapters have failed more than 3 sync runs in the last 15 minutes."
+        labels:
+          severity: warning
+
+      - uid: transit-feed-quarantine
+        title: "Feed quarantine activity"
+        condition: C
+        for: 0m
+        data:
+          - refId: A
+            relativeTimeRange: { from: 300, to: 0 }
+            datasourceUid: REPLACE_WITH_DATASOURCE_UID
+            model:
+              format: table
+              rawSql: >-
+                SELECT count(*) AS quarantined
+                FROM transit.feed_quarantine
+                WHERE created_at > now() - interval '5 minutes'
+              rawQuery: true
+          - refId: C
+            datasourceUid: "__expr__"
+            model:
+              type: threshold
+              expression: A
+              conditions:
+                - evaluator: { type: gt, params: [0] }
+        annotations:
+          summary: "A feed sync was quarantined in the last 5 minutes — an upstream feed likely broke its contract."
+        labels:
+          severity: critical
+
+      - uid: transit-api-p95-latency
+        title: "API p95 latency above 2s"
+        condition: C
+        for: 10m
+        data:
+          - refId: A
+            relativeTimeRange: { from: 600, to: 0 }
+            datasourceUid: REPLACE_WITH_DATASOURCE_UID
+            model:
+              format: table
+              rawSql: >-
+                SELECT percentile_cont(0.95) WITHIN GROUP (ORDER BY latency_ms) AS p95_ms
+                FROM transit.usage_events
+                WHERE ts > now() - interval '10 minutes'
+              rawQuery: true
+          - refId: C
+            datasourceUid: "__expr__"
+            model:
+              type: threshold
+              expression: A
+              conditions:
+                - evaluator: { type: gt, params: [2000] }
+        annotations:
+          summary: "API p95 latency has exceeded 2 seconds for 10 minutes."
+        labels:
+          severity: warning
+
+      - uid: transit-api-key-quota-exhausted
+        title: "API key exhausted its daily quota"
+        condition: C
+        for: 0m
+        data:
+          - refId: A
+            relativeTimeRange: { from: 86400, to: 0 }
+            datasourceUid: REPLACE_WITH_DATASOURCE_UID
+            model:
+              format: table
+              rawSql: >-
+                SELECT k.label
+                FROM transit.api_keys k
+                JOIN transit.usage_events u ON u.api_key_id = k.id AND u.ts >= date_trunc('day', now())
+                WHERE k.revoked_at IS NULL AND k.quota_daily > 0
+                GROUP BY k.id, k.label, k.quota_daily
+                HAVING count(u.id) >= k.quota_daily
+              rawQuery: true
+          - refId: C
+            datasourceUid: "__expr__"
+            model:
+              type: threshold
+              expression: A
+              conditions:
+                - evaluator: { type: gt, params: [0] }
+        annotations:
+          summary: "At least one API key has hit its quota_daily before the day's window reset — a data-consumer integration may be silently failing."
+        labels:
+          severity: info

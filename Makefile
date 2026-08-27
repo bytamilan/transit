@@ -26,7 +26,7 @@ DB_URL_DOCKER ?= postgres://postgres:$(POSTGRES_PASSWORD)@host.docker.internal:5
 PSQL := docker run --rm -e PGPASSWORD=$(POSTGRES_PASSWORD) -v "$(PWD)/infra/supabase:/infra/supabase" $(TEST_DB_IMAGE) psql
 TEST_PSQL := docker exec -e PGPASSWORD=$(TEST_DB_PASSWORD) transit-test-db psql
 
-.PHONY: help dev down logs lint test gen ingest.build ingest feedcheck db.migrate db.seed db.test portal.install portal.dev portal.build tracker.build tracker exporter.build exporter gtfs.validate
+.PHONY: help dev down logs lint test gen ingest.build ingest feedcheck db.migrate db.seed db.test portal.install portal.dev portal.build tracker.build tracker exporter.build exporter gtfs.validate loadtest.build loadtest
 
 help: ## Show this help
 	@grep -E '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-10s\033[0m %s\n", $$1, $$2}'
@@ -52,8 +52,12 @@ lint: ## Lint Go, Dart and portal code
 	-melos run lint
 	-pnpm -C apps/portal lint
 
-test: ## Run Go unit tests (no database required)
+test: ## Run Go, Flutter (driver_app + rider_app) and portal suites — brief §12: "make test runs Dart, Go and portal suites"
 	cd services/api && go test -short ./...
+	cd apps/driver_app && flutter test
+	cd apps/rider_app && flutter test
+	pnpm -C apps/portal typecheck
+	pnpm -C apps/portal build
 
 portal.install: ## Install portal (Next.js admin console) dependencies
 	pnpm -C apps/portal install
@@ -95,6 +99,16 @@ exporter.build: ## Build the exporter binary (Phase 10 GTFS.zip + service-alerts
 
 exporter: exporter.build ## Run the exporter with DATABASE_URL (serves on EXPORTER_ADDR, default :8090)
 	cd services/api && DATABASE_URL="$(DB_URL)" ./bin/exporter
+
+loadtest.build: ## Build the loadtest binary (Phase 12 HTTP load generator)
+	cd services/api && go build -o bin/loadtest ./cmd/loadtest
+
+loadtest: loadtest.build ## Run a load test: make loadtest url=http://localhost:8080/v0/agencies/demo-metro/stops concurrency=50 duration=30s
+	@if [ -z "$(url)" ]; then \
+		echo "Usage: make loadtest url=http://localhost:8080/... [concurrency=50] [duration=30s] [method=GET] [rps=0]"; \
+		exit 1; \
+	fi
+	cd services/api && ./bin/loadtest -url "$(url)" -concurrency "$(or $(concurrency),10)" -duration "$(or $(duration),30s)" -method "$(or $(method),GET)" -rps "$(or $(rps),0)"
 
 gtfs.validate: ## Validate an exported feed with MobilityData's gtfs-validator: make gtfs.validate slug=demo-metro
 	@if [ -z "$(slug)" ]; then \

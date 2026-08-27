@@ -1,0 +1,100 @@
+name: Release
+
+# Tags images and drafts a changelog on every `v*` tag push. Never run
+# against a real GitHub Actions runner this session — see ci.yml's header
+# comment for why (no `workflow`-scoped push, no CI runner in this
+# sandbox). Reviewed but unexecuted.
+#
+# Semantic versioning: this repo doesn't enforce Conventional Commits
+# today, so this workflow doesn't auto-bump versions — a human decides
+# the next vX.Y.Z tag and pushes it. release-please or a similar tool is
+# the natural next step if commit-message-driven versioning is wanted
+# later; not built this session (a real scope decision, not an oversight —
+# retrofitting Conventional Commits onto ~12 phases of existing history
+# wasn't in scope for a hardening pass).
+
+on:
+  push:
+    tags: ["v*.*.*"]
+
+permissions:
+  contents: write
+  packages: write
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - image: transit-api
+            context: services/api
+            dockerfile: services/api/Dockerfile
+          - image: transit-portal
+            context: .
+            dockerfile: apps/portal/Dockerfile
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: docker/setup-buildx-action@v3
+
+      - id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ghcr.io/${{ github.repository_owner }}/${{ matrix.image }}
+          tags: |
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=sha
+
+      - uses: docker/build-push-action@v6
+        with:
+          context: ${{ matrix.context }}
+          file: ${{ matrix.dockerfile }}
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+
+  changelog-and-release:
+    runs-on: ubuntu-latest
+    needs: [build-and-push]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # full history — needed to diff since the previous tag
+
+      - name: generate changelog since the previous tag
+        id: changelog
+        run: |
+          PREV_TAG=$(git describe --tags --abbrev=0 "${GITHUB_REF_NAME}^" 2>/dev/null || echo "")
+          if [ -z "$PREV_TAG" ]; then
+            RANGE="${GITHUB_REF_NAME}"
+          else
+            RANGE="${PREV_TAG}..${GITHUB_REF_NAME}"
+          fi
+          {
+            echo "changelog<<EOF"
+            git log "$RANGE" --pretty=format:"- %s (%h)" --no-merges
+            echo ""
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+
+      - uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          generate_release_notes: false
+          body: |
+            ## Changes since the previous tag
+
+            ${{ steps.changelog.outputs.changelog }}
+
+            ## Images
+
+            - `ghcr.io/${{ github.repository_owner }}/transit-api:${{ github.ref_name }}`
+            - `ghcr.io/${{ github.repository_owner }}/transit-portal:${{ github.ref_name }}`

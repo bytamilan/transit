@@ -1,0 +1,12 @@
+apiVersion: v2
+name: transit
+description: >-
+  Transit platform (services/api's server/ingestor/tracker/exporter binaries
+  + the Next.js admin portal) — Phase 12 hardening deliverable (build brief
+  §11). Never installed against a real cluster in this session; see
+  deploy/helm/README.md.
+type: application
+version: 0.1.0
+appVersion: "0.1.0"
+maintainers:
+  - name: Transit

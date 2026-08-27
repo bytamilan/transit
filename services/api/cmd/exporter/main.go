@@ -20,6 +20,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 	"google.golang.org/protobuf/proto"
 
 	"github.com/bytamilan/transit/services/api/internal/exporter"
@@ -31,6 +32,7 @@ import (
 	"github.com/bytamilan/transit/services/api/internal/store/shapes"
 	"github.com/bytamilan/transit/services/api/internal/store/stops"
 	"github.com/bytamilan/transit/services/api/internal/store/trips"
+	"github.com/bytamilan/transit/services/api/internal/telemetry"
 )
 
 func main() {
@@ -38,6 +40,19 @@ func main() {
 	var lvl slog.Level
 	_ = lvl.UnmarshalText([]byte(logLevel))
 	slog.SetDefault(slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{Level: lvl})))
+
+	shutdownTelemetry, err := telemetry.Setup(context.Background(), "transit-exporter")
+	if err != nil {
+		slog.Error("failed to set up telemetry", "err", err)
+		os.Exit(1)
+	}
+	defer func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		if err := shutdownTelemetry(ctx); err != nil {
+			slog.Error("telemetry shutdown failed", "err", err)
+		}
+	}()
 
 	dsn := envOr("DATABASE_URL", "")
 	if dsn == "" {
@@ -78,7 +93,7 @@ func main() {
 
 	addr := envOr("EXPORTER_ADDR", ":8090")
 	slog.Info("exporter listening", "addr", addr, "export_interval", interval.String(), "export_dir", exportDir)
-	if err := http.ListenAndServe(addr, svc.router()); err != nil {
+	if err := http.ListenAndServe(addr, otelhttp.NewHandler(svc.router(), "transit-exporter")); err != nil {
 		slog.Error("exporter server exited", "err", err)
 		os.Exit(1)
 	}
@@ -148,11 +163,15 @@ func (s *exportService) exportAll(ctx context.Context) {
 		return
 	}
 	for _, a := range list {
-		data, err := s.sources.BuildGTFSZip(ctx, a.ID)
+		spanCtx, span := telemetry.Tracer("transit-exporter").Start(ctx, "exporter.build_gtfs_zip")
+		data, err := s.sources.BuildGTFSZip(spanCtx, a.ID)
 		if err != nil {
+			span.RecordError(err)
+			span.End()
 			slog.Error("build gtfs zip", "agency", a.Slug, "err", err)
 			continue
 		}
+		span.End()
 		path := filepath.Join(s.dir, a.Slug+".zip")
 		tmp := path + ".tmp"
 		if err := os.WriteFile(tmp, data, 0o644); err != nil {

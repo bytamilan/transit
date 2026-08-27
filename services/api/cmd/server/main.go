@@ -16,6 +16,7 @@ import (
 	"github.com/bytamilan/transit/services/api/internal/httpapi/auth"
 	"github.com/bytamilan/transit/services/api/internal/httpapi/handlers"
 	"github.com/bytamilan/transit/services/api/internal/store/agencies"
+	"github.com/bytamilan/transit/services/api/internal/store/apikeys"
 	"github.com/bytamilan/transit/services/api/internal/store/audit"
 	"github.com/bytamilan/transit/services/api/internal/store/blocks"
 	"github.com/bytamilan/transit/services/api/internal/store/calendar"
@@ -33,12 +34,27 @@ import (
 	"github.com/bytamilan/transit/services/api/internal/store/trips"
 	"github.com/bytamilan/transit/services/api/internal/store/vehicles"
 	"github.com/bytamilan/transit/services/api/internal/store/vehicletrips"
+	"github.com/bytamilan/transit/services/api/internal/telemetry"
 	"github.com/go-chi/chi/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 )
 
 func main() {
 	addr := envOr("API_ADDR", ":8080")
+
+	shutdownTelemetry, err := telemetry.Setup(context.Background(), "transit-api")
+	if err != nil {
+		slog.Error("failed to set up telemetry", "err", err)
+		os.Exit(1)
+	}
+	defer func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		if err := shutdownTelemetry(ctx); err != nil {
+			slog.Error("telemetry shutdown failed", "err", err)
+		}
+	}()
 
 	pool, err := openDB(envOr("DATABASE_URL", ""))
 	if err != nil {
@@ -58,6 +74,7 @@ func main() {
 
 	auditWriter := audit.New(pool)
 	admin := &handlers.Admin{Audit: auditWriter}
+	apiKeysAdmin := &handlers.APIKeysAdmin{Keys: apikeys.New(pool), Audit: auditWriter}
 	agencyStore := agencies.New(pool)
 	routeStore := routes.New(pool)
 	tripStore := trips.New(pool)
@@ -88,6 +105,7 @@ func main() {
 		Routes:   routeStore,
 		Trips:    tripStore,
 		Calendar: calendar.New(pool),
+		Audit:    auditWriter,
 	}
 	dutyStore := duty.New(pool)
 	pingStore := pings.New(pool)
@@ -174,6 +192,11 @@ func main() {
 		r.Get("/admin/health", admin.Health)
 		r.Get("/admin/audit/export", admin.ExportAudit)
 
+		r.Get("/admin/api-keys", apiKeysAdmin.ListKeys)
+		r.Post("/admin/api-keys", apiKeysAdmin.CreateKey)
+		r.Delete("/admin/api-keys/{id}", apiKeysAdmin.RevokeKey)
+		r.Get("/admin/api-keys/usage", apiKeysAdmin.UsageSummary)
+
 		r.Get("/admin/depots", fleet.ListDepots)
 		r.Post("/admin/depots", fleet.CreateDepot)
 
@@ -245,7 +268,7 @@ func main() {
 	})
 
 	slog.Info("transit api listening", "addr", addr)
-	if err := http.ListenAndServe(addr, r); err != nil {
+	if err := http.ListenAndServe(addr, otelhttp.NewHandler(r, "transit-api")); err != nil {
 		slog.Error("server exited", "err", err)
 		os.Exit(1)
 	}

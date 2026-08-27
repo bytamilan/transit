@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../providers/duty_provider.dart';
+import '../utils/localized_name.dart';
 
 /// What is recorded, and for how long — required reading before a driver's
 /// first shift (brief §10: driver location is personal data; continuous
@@ -43,7 +44,7 @@ class TransparencyScreen extends ConsumerWidget {
               data: (a) =>
                   'Your agency configures the retention window for raw location traces (default: a rolling short '
                   'window, after which only aggregated arrival/delay data is kept — not your individual trace). '
-                  'Ask your fleet manager for ${a.name['en'] ?? 'your agency'}\'s exact policy.',
+                  'Ask your fleet manager for ${localizedName(a.name).isNotEmpty ? localizedName(a.name) : 'your agency'}\'s exact policy.',
               loading: () => 'Loading your agency\'s retention policy…',
               error: (e, _) => 'Ask your fleet manager for your agency\'s exact retention policy.',
             ),

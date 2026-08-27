@@ -23,6 +23,7 @@ import (
 	"github.com/bytamilan/transit/services/api/internal/store/pings"
 	"github.com/bytamilan/transit/services/api/internal/store/stopevents"
 	"github.com/bytamilan/transit/services/api/internal/store/vehicletrips"
+	"github.com/bytamilan/transit/services/api/internal/telemetry"
 	"github.com/bytamilan/transit/services/api/internal/tracking"
 )
 
@@ -31,6 +32,19 @@ func main() {
 	var lvl slog.Level
 	_ = lvl.UnmarshalText([]byte(logLevel))
 	slog.SetDefault(slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{Level: lvl})))
+
+	shutdownTelemetry, err := telemetry.Setup(context.Background(), "transit-tracker")
+	if err != nil {
+		slog.Error("failed to set up telemetry", "err", err)
+		os.Exit(1)
+	}
+	defer func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		if err := shutdownTelemetry(ctx); err != nil {
+			slog.Error("telemetry shutdown failed", "err", err)
+		}
+	}()
 
 	dsn := envOr("DATABASE_URL", "")
 	if dsn == "" {
@@ -73,18 +87,25 @@ func runLoop(ctx context.Context, tick, purgeInterval time.Duration, svc *tracki
 			slog.Info("tracker shutting down")
 			return
 		case <-trackTicker.C:
-			processed, err := svc.ProcessOpenAssignments(ctx)
+			spanCtx, span := telemetry.Tracer("transit-tracker").Start(ctx, "tracker.process_open_assignments")
+			processed, err := svc.ProcessOpenAssignments(spanCtx)
 			if err != nil {
+				span.RecordError(err)
 				slog.Error("process open assignments", "processed", processed, "err", err)
 			} else if processed > 0 {
 				slog.Info("processed open assignments", "count", processed)
 			}
+			span.End()
 		case <-purgeTicker.C:
-			deleted, err := pingStore.PurgeOlderThan(ctx, retentionDays)
+			spanCtx, span := telemetry.Tracer("transit-tracker").Start(ctx, "tracker.purge_old_pings")
+			deleted, err := pingStore.PurgeOlderThan(spanCtx, retentionDays)
 			if err != nil {
+				span.RecordError(err)
+				span.End()
 				slog.Error("purge old vehicle pings", "err", err)
 				continue
 			}
+			span.End()
 			slog.Info("purged old vehicle pings", "deleted", deleted, "retention_days", retentionDays)
 		}
 	}
