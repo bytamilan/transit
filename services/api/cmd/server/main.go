@@ -22,6 +22,8 @@ import (
 	"github.com/bytamilan/transit/services/api/internal/store/depots"
 	"github.com/bytamilan/transit/services/api/internal/store/drivers"
 	"github.com/bytamilan/transit/services/api/internal/store/duty"
+	"github.com/bytamilan/transit/services/api/internal/store/incidents"
+	"github.com/bytamilan/transit/services/api/internal/store/pings"
 	"github.com/bytamilan/transit/services/api/internal/store/routes"
 	"github.com/bytamilan/transit/services/api/internal/store/stops"
 	"github.com/bytamilan/transit/services/api/internal/store/trips"
@@ -73,10 +75,18 @@ func main() {
 		Trips:    tripStore,
 		Calendar: calendar.New(pool),
 	}
+	dutyStore := duty.New(pool)
 	roster := &handlers.Roster{
 		Dispatch: dispatch.New(
-			vehicles.New(pool), drivers.New(pool), blocks.New(pool), duty.New(pool), agencyStore, auditWriter,
+			vehicles.New(pool), drivers.New(pool), blocks.New(pool), dutyStore, agencyStore, auditWriter,
 		),
+	}
+	driverAPI := &handlers.Driver{
+		Agencies:  agencyStore,
+		Duty:      dutyStore,
+		Blocks:    blocks.New(pool),
+		Pings:     pings.New(pool),
+		Incidents: incidents.New(pool),
 	}
 
 	r := chi.NewRouter()
@@ -133,6 +143,16 @@ func main() {
 		r.Get("/admin/duty-assignments/{id}/events", roster.ListDutyEvents)
 
 		r.Post("/admin/roster/expand", roster.ExpandRoster)
+
+		// Driver-app-scoped surface (Phase 7). Self-service only — every
+		// handler re-derives the target from the JWT, never a request param.
+		r.Get("/driver/agency", driverAPI.GetAgency)
+		r.Get("/driver/duty", driverAPI.ListDuty)
+		r.Get("/driver/duty/{id}/block", driverAPI.GetDutyBlock)
+		r.Post("/driver/duty/{id}/confirm", driverAPI.ConfirmDuty)
+		r.Post("/driver/duty/{id}/end", driverAPI.EndDuty)
+		r.Post("/driver/pings", driverAPI.SubmitPings)
+		r.Post("/driver/incidents", driverAPI.SubmitIncident)
 	})
 
 	slog.Info("transit api listening", "addr", addr)

@@ -1,0 +1,16 @@
+name: transit_telemetry
+description: >-
+  Ping queue, adaptive sampling, GPS smoothing, map-matching and trip/stop
+  detection for the driver app (build brief §4.2). Pure Dart — no Flutter
+  dependency — so the tracking logic is testable without a device and the
+  driver app supplies its own persistence/location plugins behind the
+  interfaces this package defines.
+version: 0.1.0
+publish_to: none
+
+environment:
+  sdk: ">=3.0.0 <4.0.0"
+
+dev_dependencies:
+  test: ^1.25.0
+  lints: ^4.0.0

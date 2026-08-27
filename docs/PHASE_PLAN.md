@@ -15,7 +15,7 @@
 | 4 | OpenAPI v0.1 + Go read API + generated Dart client | ✅ |
 | 5 | Rider app | ✅ |
 | 6 | Admin console: fleet, drivers, duty assignment | 🔵 |
-| 7 | Driver app: always-on shell + telemetry | ⚪ |
+| 7 | Driver app: always-on shell + telemetry | 🔵 |
 | 8 | Server-side tracking → GTFS-RT | ⚪ |
 | 9 | Live dispatch board + alerts | ⚪ |
 | 10 | `manual` adapter + GTFS/GTFS-RT export | ⚪ |
@@ -306,11 +306,55 @@ property-test the rest-gap and overlap logic.
 
 ---
 
-## Phase 7 — Driver app: always-on shell + zero-touch telemetry
+## Phase 7 — Driver app: always-on shell + zero-touch telemetry 🔵
 
 **Objective:** the phone becomes the AVL unit. Two touches per shift.
 
-**Tasks:**
+**Delivered:**
+1. Backend support the driver app needs, added ahead of Phase 8:
+   migration `0011_telemetry.sql` (`vehicle_pings`, `incident_reports`, RLS —
+   "drivers insert pings only for their own open duty" — SECURITY DEFINER
+   helpers); `internal/store/{pings,incidents}`; a new `/driver/*` handler
+   surface (`internal/httpapi/handlers/driver.go`) that is self-service only
+   — every endpoint re-derives the target duty from the JWT, never a request
+   parameter — covering agency lookup, own duty list, own duty's block
+   (trip_ids), confirm/end duty, batched ping submission, and one-tap
+   incident reports. Phase 8 still owns turning raw pings into authoritative
+   `stop_events` — this only adds where they land.
+2. `packages/transit_telemetry` (pure Dart, unit tested, no Flutter
+   dependency): `AdaptiveSampler`, `FixValidator`, `GeoKalmanFilter`,
+   `ShapeMatcher` (monotonic `shape_dist_traveled`), `TripTracker`
+   (auto-start/progression/auto-end state machine using the GTFS-RT
+   `VehiclePosition.current_status` vocabulary), `PingQueue`/`PingStorage`
+   (storage-agnostic persistent queue) and `TelemetryEngine` tying them
+   together.
+3. `apps/driver_app`: login → onboarding (location + battery-optimisation
+   exemption + per-OEM Xiaomi/Huawei/Oppo/Vivo autostart intents + kiosk-mode
+   guidance) → duty list → always-on active-shift screen (safety interlock,
+   occupancy, incident) → transparency screen. `flutter_background_service`
+   runs tracking in its own isolate with `AndroidForegroundType.location`
+   and `autoStartOnBoot`, re-deriving state from `RecoveryStore`
+   (SharedPreferences) rather than the UI isolate, so it can resume after a
+   reboot with no UI present. AndroidManifest.xml / Info.plist carry the
+   background-location permissions and foreground-service/background-mode
+   declarations.
+4. Shape data gap: Phase 4 never exposed a shapes.txt read endpoint, so
+   `DutyBlockLoader` builds the on-device shape as the straight line through
+   a block's stops in order (via the public `/v0` read API) rather than a
+   true polyline — the same degraded fallback GTFS tooling uses for a feed
+   with no shapes.txt. A future phase can add a shapes endpoint and swap it
+   in without changing `transit_telemetry`'s interface.
+
+**Not yet verified — needs a real device:** `flutter analyze` and
+`flutter test` are clean, and `flutter build apk --debug` succeeds (a real
+Gradle build caught and fixed a genuine missing-desugaring config error, so
+this isn't just a static check). No runtime verification: the always-on
+shell, background survival, per-OEM wizard, and the phase gate itself (8h
+shift, forced reboot, 40-minute airplane-mode gap) all need testing on an
+actual device — this could not be done in the sandbox this phase was built
+in. An iOS build was not attempted.
+
+**Tasks (original spec, for reference):**
 1. Auth + duty fetch: login once, query own `duty_assignments`, confirm duty.
 2. Always-on shell: `wakelock_plus` for duty duration, scheduled/ambient
    night palette, **Android foreground service** (location type, persistent
@@ -347,8 +391,12 @@ and foreground-service correctness are gate items, not nice-to-haves.
 **Objective:** authoritative realtime, computed server-side from raw pings.
 
 **Tasks:**
-1. `vehicle_pings` ingestion endpoint (batched, idempotent, RLS: driver may
-   insert only for own open duty).
+1. ~~`vehicle_pings` ingestion endpoint~~ — delivered in Phase 7
+   (`POST /driver/pings`, migration `0011_telemetry.sql`) since the driver
+   app needed somewhere to flush to. Batched and RLS'd as specified; not yet
+   idempotent against retried batches (Phase 7 punted that to here, see its
+   `Store.InsertBatch` doc comment) — add idempotency here if duplicate
+   pings from a retried flush turn out to matter for the map-matching math.
 2. Hot-table ops: daily partitions, configurable raw retention (default 7
    days), rollup into `stop_events` + speed profiles (§8).
 3. `internal/tracking`: re-run map-matching and stop detection over the raw
