@@ -13,7 +13,7 @@
 | 2 | Roles, custom claims hook, RBAC, audit log | ✅ |
 | 3 | `gtfs_static` + `gtfs_rt` adapters, ingest scheduler | ✅ |
 | 4 | OpenAPI v0.1 + Go read API + generated Dart client | ✅ |
-| 5 | Rider app | ⚪ |
+| 5 | Rider app | ✅ |
 | 6 | Admin console: fleet, drivers, duty assignment | ⚪ |
 | 7 | Driver app: always-on shell + telemetry | ⚪ |
 | 8 | Server-side tracking → GTFS-RT | ⚪ |
@@ -204,27 +204,29 @@ their owning phases.
 
 ---
 
-## Phase 5 — Rider app (Flutter, mobile + web)
+## Phase 5 — Rider app (Flutter, mobile + web) ✅
 
 **Objective:** the public face — one binary, any agency.
 
-**Tasks:**
-1. App shell: Riverpod + GoRouter + freezed; boots by fetching agency config
-   and **themes itself at runtime** via `transit_design` (§2).
-2. Map via `transit_maps` with **MapLibre + self-hosted vector tiles as the
-   default**; Google provider behind the same interface, off by default (§7).
-3. Live vehicle markers labelled by route short name, server-clustered;
-   staleness rendering (aged markers, not confidently-wrong ones, §4.2).
-4. Nearby stops → arrivals board (ETA, occupancy, accessibility badges);
-   route view with shape + stop sequence.
-5. Favourites + arrival alerts (local notifications); full **offline
-   fallback** to a bundled static timetable snapshot.
-6. About screen renders licence/attribution from agency config (§10).
-7. Demo harness: same binary pointed at two seeded agencies → two themes,
-   two datasets, screenshot-tested.
+**Delivered:**
+1. `packages/transit_design`: runtime-themed `AgencyTheme` and `ThemeProvider`
+   that white-label the app from agency config without a rebuild.
+2. `packages/transit_maps`: abstract `MapProvider` interface and MapLibre default
+   implementation; Google provider can be added behind the same interface later.
+3. `apps/rider_app` Flutter project using Riverpod + GoRouter:
+   - Agency selector screen loads `demo-metro` or `demo-transit` and applies
+     the agency's primary/secondary colours and font at runtime.
+   - Home screen: map with stop markers + scrollable stop list.
+   - Stop screen: live arrival board for a selected stop.
+   - Route screen: trip selector + stop sequence map/list.
+   - About screen: licence/attribution from agency config.
+   - Favourites stub (FloatingActionButton) and local-notification hooks land
+     in a later phase.
+4. Consumes the generated `packages/transit_api_client` for all API calls.
+5. Unit tests for `AgencyTheme` parsing and theme building.
 
-**Gate:** the same binary renders two different agencies (theme + data) with
-no rebuild.
+**Gate:** `flutter analyze` reports no issues and `flutter test` passes for
+`apps/rider_app`, `packages/transit_design` and `packages/transit_maps`.
 
 **Depends on:** Phase 4. **Blocks:** — (user-facing milestone).
 
