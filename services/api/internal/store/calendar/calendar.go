@@ -57,6 +57,37 @@ func (r *Reader) List(ctx context.Context, agencyID uuid.UUID) ([]Calendar, erro
 	return out, rows.Err()
 }
 
+// DateException is one row of calendar_dates.txt.
+type DateException struct {
+	ServiceID     string
+	Date          time.Time
+	ExceptionType int // 1 = added, 2 = removed
+}
+
+// ListDateExceptions returns every calendar_dates row for an agency — used
+// by cmd/exporter; calendar_dates.txt is optional in GTFS and most feeds
+// (including the demo seed data) have none.
+func (r *Reader) ListDateExceptions(ctx context.Context, agencyID uuid.UUID) ([]DateException, error) {
+	if r.pool == nil {
+		return nil, fmt.Errorf("calendar reader not connected to a database")
+	}
+	rows, err := r.pool.Query(ctx, `SELECT * FROM transit.list_calendar_dates($1)`, agencyID)
+	if err != nil {
+		return nil, fmt.Errorf("query calendar dates: %w", err)
+	}
+	defer rows.Close()
+
+	var out []DateException
+	for rows.Next() {
+		var d DateException
+		if err := rows.Scan(&d.ServiceID, &d.Date, &d.ExceptionType); err != nil {
+			return nil, fmt.Errorf("scan calendar date: %w", err)
+		}
+		out = append(out, d)
+	}
+	return out, rows.Err()
+}
+
 // Upsert creates or updates a service calendar.
 func (r *Reader) Upsert(ctx context.Context, agencyID uuid.UUID, c Calendar) error {
 	if r.pool == nil {

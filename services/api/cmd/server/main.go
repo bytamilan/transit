@@ -117,17 +117,36 @@ func main() {
 		Messages:     messageStore,
 		Audit:        auditWriter,
 	}
+	gbfs := &handlers.GBFS{Agencies: agencyStore}
+	agencyList := &handlers.AgencyList{Agencies: agencyStore}
 
 	r := chi.NewRouter()
 
-	// Public read API generated from contracts/openapi.yaml (Phase 4).
-	r.Mount("/", oapi.Handler(public))
+	// Every /v0 response is upstream-sourced data (no community/crowdsourced
+	// merge exists yet — see docs/PHASE_PLAN.md Phase 10), so the header is a
+	// blanket constant applied to the whole public surface rather than
+	// per-field provenance tracking.
+	r.Group(func(r chi.Router) {
+		r.Use(dataSourceHeader)
 
-	// GTFS-RT protobuf feeds (Phase 8). Public and unauthenticated like the
-	// rest of /v0, but hand-mounted rather than generated — see GTFSRT's
-	// doc comment for why.
-	r.Get("/v0/agencies/{slug}/gtfs-rt/vehicle-positions", gtfsrt.VehiclePositions)
-	r.Get("/v0/agencies/{slug}/gtfs-rt/trip-updates", gtfsrt.TripUpdates)
+		// Public read API generated from contracts/openapi.yaml (Phase 4).
+		r.Mount("/", oapi.Handler(public))
+
+		// GTFS-RT protobuf feeds (Phase 8). Public and unauthenticated like
+		// the rest of /v0, but hand-mounted rather than generated — see
+		// GTFSRT's doc comment for why.
+		r.Get("/v0/agencies/{slug}/gtfs-rt/vehicle-positions", gtfsrt.VehiclePositions)
+		r.Get("/v0/agencies/{slug}/gtfs-rt/trip-updates", gtfsrt.TripUpdates)
+
+		// GBFS stub (Phase 10) — only serves agencies configured with a
+		// micromobility mode; see GBFS's doc comment for the stub boundary.
+		r.Get("/v0/agencies/{slug}/gbfs.json", gbfs.Discovery)
+		r.Get("/v0/agencies/{slug}/gbfs/system_information.json", gbfs.SystemInformation)
+
+		// Agency directory (Phase 10) — backs the portal's public /datasets
+		// page; not part of contracts/openapi.yaml, see AgencyList's doc comment.
+		r.Get("/v0/agencies", agencyList.List)
+	})
 
 	// Authenticated admin surface (Phase 2 + Phase 6). Hand-rolled rather
 	// than OpenAPI-generated — /admin is an internal operational surface, not
@@ -253,4 +272,15 @@ func envOr(key, fallback string) string {
 		return v
 	}
 	return fallback
+}
+
+// dataSourceHeader tags every public /v0 response with its provenance.
+// Simplification (Phase 10): this deployment only ever merges upstream
+// adapter data, so the value is a blanket constant rather than per-field
+// upstream/community tracking.
+func dataSourceHeader(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("X-Data-Source", "upstream")
+		next.ServeHTTP(w, r)
+	})
 }

@@ -26,7 +26,7 @@ DB_URL_DOCKER ?= postgres://postgres:$(POSTGRES_PASSWORD)@host.docker.internal:5
 PSQL := docker run --rm -e PGPASSWORD=$(POSTGRES_PASSWORD) -v "$(PWD)/infra/supabase:/infra/supabase" $(TEST_DB_IMAGE) psql
 TEST_PSQL := docker exec -e PGPASSWORD=$(TEST_DB_PASSWORD) transit-test-db psql
 
-.PHONY: help dev down logs lint test gen ingest.build ingest feedcheck db.migrate db.seed db.test portal.install portal.dev portal.build tracker.build tracker
+.PHONY: help dev down logs lint test gen ingest.build ingest feedcheck db.migrate db.seed db.test portal.install portal.dev portal.build tracker.build tracker exporter.build exporter gtfs.validate
 
 help: ## Show this help
 	@grep -E '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-10s\033[0m %s\n", $$1, $$2}'
@@ -90,6 +90,23 @@ tracker.build: ## Build the tracker binary (Phase 8 background reprocessing)
 tracker: tracker.build ## Run the tracker once with DATABASE_URL
 	cd services/api && DATABASE_URL="$(DB_URL)" ./bin/tracker
 
+exporter.build: ## Build the exporter binary (Phase 10 GTFS.zip + service-alerts publisher)
+	cd services/api && go build -o bin/exporter ./cmd/exporter
+
+exporter: exporter.build ## Run the exporter with DATABASE_URL (serves on EXPORTER_ADDR, default :8090)
+	cd services/api && DATABASE_URL="$(DB_URL)" ./bin/exporter
+
+gtfs.validate: ## Validate an exported feed with MobilityData's gtfs-validator: make gtfs.validate slug=demo-metro
+	@if [ -z "$(slug)" ]; then \
+		echo "Usage: make gtfs.validate slug=demo-metro (expects EXPORT_DIR/$(slug).zip on disk, default EXPORT_DIR=./services/api/data/exports)"; \
+		exit 1; \
+	fi
+	docker run --rm \
+		-v "$(or $(EXPORT_DIR),$(PWD)/services/api/data/exports):/data" \
+		-v "$(PWD)/services/api/data/gtfs-validator-report:/report" \
+		ghcr.io/mobilitydata/gtfs-validator:latest \
+		--input /data/$(slug).zip --output_base /report
+
 feedcheck: ingest.build ## Validate a single feed: make feedcheck adapter=gtfs_static url=...
 	@if [ -z "$(adapter)" ] || [ -z "$(url)" ]; then \
 		echo "Usage: make feedcheck adapter=gtfs_static url=..."; \
@@ -129,6 +146,6 @@ db.test: db.build ## Start a test PostGIS container, migrate, seed, run integrat
 	done
 	cd services/api && DATABASE_URL="$(MIGRATE_TEST_DB_URL)" MIGRATIONS_DIR="$(MIGRATIONS_DIR)" ./bin/migrate up
 	$(TEST_PSQL) "postgres://postgres:$(TEST_DB_PASSWORD)@localhost/postgres?sslmode=disable" -f "/infra/supabase/seed/demo_agencies.sql"
-	cd services/api && DATABASE_URL="$(TEST_DB_URL)" go test -tags integration ./internal/store/... ./internal/adapters/... ./internal/httpapi/...
+	cd services/api && DATABASE_URL="$(TEST_DB_URL)" go test -tags integration ./internal/store/... ./internal/adapters/... ./internal/httpapi/... ./internal/exporter/...
 	@docker stop transit-test-db > /dev/null
 	@echo "Test database stopped."

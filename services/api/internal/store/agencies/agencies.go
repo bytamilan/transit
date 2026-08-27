@@ -84,3 +84,33 @@ func (r *Reader) LookupByID(ctx context.Context, id uuid.UUID) (*Agency, error) 
 
 	return &Agency{ID: outID, Slug: slug, Name: name, Timezone: timezone, Config: config}, nil
 }
+
+// AgencyRef is a minimal (id, slug) pair — what a platform-wide background
+// job like cmd/exporter needs to iterate every agency without paying for a
+// full config/name fetch per row.
+type AgencyRef struct {
+	ID   uuid.UUID
+	Slug string
+}
+
+// ListAll returns every agency on the deployment, ordered by slug.
+func (r *Reader) ListAll(ctx context.Context) ([]AgencyRef, error) {
+	if r.pool == nil {
+		return nil, fmt.Errorf("agency reader not connected to a database")
+	}
+	rows, err := r.pool.Query(ctx, `SELECT * FROM transit.list_agencies()`)
+	if err != nil {
+		return nil, fmt.Errorf("query agencies: %w", err)
+	}
+	defer rows.Close()
+
+	var out []AgencyRef
+	for rows.Next() {
+		var a AgencyRef
+		if err := rows.Scan(&a.ID, &a.Slug); err != nil {
+			return nil, fmt.Errorf("scan agency ref: %w", err)
+		}
+		out = append(out, a)
+	}
+	return out, rows.Err()
+}

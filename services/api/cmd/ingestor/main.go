@@ -11,8 +11,12 @@ import (
 	"time"
 
 	"github.com/bytamilan/transit/services/api/internal/adapters"
+	"github.com/bytamilan/transit/services/api/internal/adapters/manual"
 	"github.com/bytamilan/transit/services/api/internal/ingest"
 	"github.com/bytamilan/transit/services/api/internal/store/feeds"
+	"github.com/bytamilan/transit/services/api/internal/store/routes"
+	"github.com/bytamilan/transit/services/api/internal/store/stops"
+	"github.com/bytamilan/transit/services/api/internal/store/trips"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -36,6 +40,7 @@ func main() {
 	defer pool.Close()
 
 	reg := ingest.NewRegistry(&adapters.DefaultFetcher{Client: http.DefaultClient})
+	reg.Register(manual.Name, &manual.Adapter{Stops: stops.New(pool), Routes: routes.New(pool), Trips: trips.New(pool)})
 	reader := feeds.New(pool)
 	runs := feeds.NewSyncRunWriter(pool)
 	quarantine := feeds.NewQuarantineWriter(pool)

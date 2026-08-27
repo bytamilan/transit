@@ -58,6 +58,29 @@ services:
       db:
         condition: service_healthy
 
+  # Phase 10: builds GTFS.zip per agency on a schedule and serves it, plus a
+  # GTFS-RT ServiceAlerts stub. VehiclePositions/TripUpdates stay on `api`
+  # (Phase 8) — see cmd/exporter's package doc for why they aren't
+  # duplicated here. Its own volume so an export survives a container
+  # restart instead of `/gtfs.zip` 404ing until the next tick.
+  exporter:
+    build:
+      context: ../../services/api
+    command: ["/exporter"]
+    environment:
+      DATABASE_URL: postgres://postgres:${POSTGRES_PASSWORD:-postgres}@db:5432/${POSTGRES_DB:-postgres}?sslmode=disable&search_path=transit,public,extensions,auth
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      EXPORT_INTERVAL: ${EXPORT_INTERVAL:-15m}
+      EXPORT_DIR: /data/exports
+      EXPORTER_ADDR: ":8090"
+    ports:
+      - "8090:8090"
+    volumes:
+      - exporter_data:/data/exports
+    depends_on:
+      db:
+        condition: service_healthy
+
   # Supabase Auth (GoTrue) — the JWT issuer used by the Flutter apps and portal.
   # Wired to the same Postgres instance; a full custom-claims hook lands in Phase 2.
   auth:
@@ -163,3 +186,4 @@ services:
 
 volumes:
   db_data:
+  exporter_data:

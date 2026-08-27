@@ -18,7 +18,7 @@
 | 7 | Driver app: always-on shell + telemetry | 🔵 |
 | 8 | Server-side tracking → GTFS-RT | 🔵 |
 | 9 | Live dispatch board + alerts | 🔵 |
-| 10 | `manual` adapter + GTFS/GTFS-RT export | ⚪ |
+| 10 | `manual` adapter + GTFS/GTFS-RT export | 🔵 |
 | 11 | RAPTOR planner, alerts, fares | ⚪ |
 | 12 | Hardening & release | ⚪ |
 
@@ -567,25 +567,117 @@ dispatch board and public feed all reflect the swap.
 
 ---
 
-## Phase 10 — `manual` adapter + GTFS/GTFS-RT export
+## Phase 10 — `manual` adapter + GTFS/GTFS-RT export 🔵
 
 **Objective:** an agency with **zero prior digital data** emits standards.
 
-**Tasks:**
-1. `manual` adapter: reads the admin-console-built network (Phase 6) as its
-   "upstream"; realtime source = driver-app telemetry with ping-age
-   confidence (§9 of brief).
-2. `cmd/exporter`: scheduled `GTFS.zip` from canonical tables; live GTFS-RT
-   protobuf endpoints (TripUpdates, VehiclePositions, ServiceAlerts).
-3. **MobilityData `gtfs-validator` in CI** against exporter fixtures; new
-   errors fail the build.
-4. Portal `/datasets` entries for the emitted feeds with licence/attribution
-   from agency config; `X-Data-Source` header on API responses (§10).
-5. GBFS endpoint stub where micromobility modes are configured.
+**Delivered:**
+1. `internal/adapters/manual`: implements the `Adapter` interface treating
+   the canonical DB itself (admin-console-authored, per Phase 6) as
+   "upstream". `SyncStatic`/`Validate` count stops/routes/trips and report
+   an `adapters.Diagnostic` per missing entity type; `SyncStatic` never
+   writes (there's nothing to import — the network already lives in the
+   canonical tables). `PollRealtime` returns an already-closed channel: this
+   adapter's realtime side is driver-app telemetry, which already flows
+   into `vehicle_pings`/`vehicle_trips` via the Phase 7/8 ping pipeline, not
+   through the adapter interface. Registered in `cmd/ingestor/main.go`.
+2. `cmd/exporter` (new binary): `internal/exporter.Sources.BuildGTFSZip`
+   builds a per-agency `GTFS.zip` (agency/stops/routes/trips/stop_times/
+   calendar, plus calendar_dates/shapes/fare_products when present) straight
+   from the canonical store readers via `archive/zip` + `encoding/csv`.
+   Migration `0014_exporter.sql` adds the `list_shapes`, `list_calendar_dates`,
+   `list_fare_products` and `list_agencies` SECURITY DEFINER reads this
+   needed (shapes/calendar_dates/fare_products had no read path anywhere
+   else). The service exports every agency on a schedule (`EXPORT_INTERVAL`,
+   default 15m) to disk (atomic temp-file + rename) and serves
+   `GET /{slug}/gtfs.zip` plus a GTFS-RT `GET /{slug}/gtfs-rt/service-alerts`
+   stub (`internal/exporter/service_alerts.go` — a structurally valid, always-empty
+   feed; real alert authoring is Phase 11's). VehiclePositions/TripUpdates
+   are **not** duplicated into this binary — they stay served by `cmd/server`
+   (Phase 8's already-working, already-tested endpoints); `cmd/exporter`'s
+   package doc explains why. Wired into `Makefile` (`exporter.build`,
+   `exporter`), `services/api/Dockerfile`, and `deploy/compose/compose.yaml`
+   (its own `exporter_data` volume so an export survives a restart).
+3. `make gtfs.validate slug=<agency>` runs MobilityData's `gtfs-validator`
+   Docker image against an exported `.zip` — added as a Makefile target,
+   **not wired into CI**: this repo still has no CI workflow at all (the same
+   gap Phase 0's follow-ups flagged), so "in CI" isn't achievable without
+   that first landing. Also never executed in this sandbox (no Docker) — see
+   below.
+4. Portal `/datasets` (new public, unauthenticated page): lists every agency
+   with its modes, licence SPDX, attribution, terms-of-use link, and
+   download links for its `GTFS.zip` and GTFS-RT service-alerts feed. Backed
+   by a new hand-mounted (not OpenAPI-generated — it's not part of the
+   versioned `/v0` contract) `GET /v0/agencies` directory endpoint
+   (`internal/httpapi/handlers/agencylist.go`). `X-Data-Source: upstream` is
+   set on every public `/v0` response via a small chi middleware in
+   `cmd/server/main.go`, and directly on `cmd/exporter`'s `gtfs.zip`
+   response — a blanket constant rather than per-field provenance, since
+   this deployment has no community-contributed data merge to distinguish
+   from upstream.
+5. GBFS stub (`internal/httpapi/handlers/gbfs.go`): `GET /v0/agencies/{slug}/gbfs.json`
+   (auto-discovery manifest) and `.../gbfs/system_information.json`, active
+   only when the agency's config `modes` includes `bike`, `scooter` or
+   `moped` (added to `infra/supabase/schemas/agency_config.json`'s enum).
+   Deliberately stops there — no `station_information`/`station_status`/
+   `free_bike_status`, since there's no micromobility fleet data model in
+   this codebase to back them.
+
+**Scope reductions, flagged:**
+- **GTFS-RT ServiceAlerts is a stub**, not real alert authoring/publishing —
+  that's explicitly Phase 11 scope per the brief.
+- **`gtfs-validator` never actually run.** The Makefile target exists but
+  needs Docker (unavailable all session) and a CI workflow that doesn't
+  exist yet in this repo. The phase's gate ("passes MobilityData
+  validation") is therefore unverified, not satisfied.
+- **`BuildGTFSZip`'s reads are capped, not paginated.** `maxExportRows =
+  1,000,000` per entity type — fine for any agency this codebase's schema
+  currently targets, but a real streaming/paginated export would be needed
+  before that cap is a live concern.
+- **`GET /v0/agencies` (the datasets directory) is N+1**: one query to list
+  agency refs, then one `LookupBySlug` per agency for name/config. Fine for
+  a low-traffic directory page at plausible agency counts; would need a
+  batched read if this deployment ever hosted hundreds of agencies.
+- **GBFS's positive path (an agency actually configured with a
+  micromobility mode) has no seed data to demonstrate against** — the demo
+  seed agency only has `bus`-family modes. The stub logic is unit-tested
+  directly (`hasMicromobilityMode`, `primaryGBFSLanguage`) and the gating's
+  negative path is integration-tested, but no live agency has ever produced
+  a real `gbfs.json`.
+
+**Not yet verified — needs a live Postgres and Docker (both unavailable all
+session), same limitation as Phases 6–9:** `manual` adapter's
+`Validate`/`SyncStatic` against real tables; `BuildGTFSZip` actually
+producing a `.zip` from seeded data (an integration test asserts its shape,
+but was only checked via `go vet -tags integration`, never executed);
+`cmd/exporter`'s scheduled export loop and file-serving under a real
+process; `gtfs-validator` passing (or even running) against real exporter
+output; the portal `/datasets` page rendering real API data (`tsc
+--noEmit` and `next build` both pass, and a manual smoke test against a
+running dev server wasn't possible — no backend to point it at). `go
+build`, `go vet` (`-tags integration` too), and `go test ./...` are all
+green; `gofmt -l` clean on every file touched this phase.
+
+**Tasks (original spec, for reference):**
+1. ~~`manual` adapter: reads the admin-console-built network... as "upstream";
+   realtime source = driver-app telemetry~~ — delivered as described above.
+2. ~~`cmd/exporter`: scheduled `GTFS.zip`... live GTFS-RT protobuf endpoints
+   (TripUpdates, VehiclePositions, ServiceAlerts)~~ — `GTFS.zip` and
+   ServiceAlerts delivered from this binary; TripUpdates/VehiclePositions
+   deliberately stayed on `cmd/server` rather than being duplicated (see
+   delivered §2).
+3. ~~MobilityData `gtfs-validator` in CI~~ — Makefile target only; not wired
+   into CI (no CI workflow exists in this repo) and never executed (no
+   Docker in this sandbox).
+4. ~~Portal `/datasets` entries... licence/attribution... `X-Data-Source`
+   header~~ — delivered.
+5. ~~GBFS endpoint stub~~ — delivered, discovery + system_information only.
 
 **Gate:** a seeded agency with no imported data emits a `GTFS.zip` that
 passes MobilityData validation, and its GTFS-RT feed reflects live driver
-telemetry.
+telemetry. **Not met in this sandbox** — the zip-building code path is
+implemented and compile/logic-tested, but never run against a live database
+or through the actual validator (see "Not yet verified" above).
 
 **Depends on:** Phases 6, 8. **Blocks:** — (the business-case phase).
 
