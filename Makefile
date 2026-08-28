@@ -26,7 +26,7 @@ DB_URL_DOCKER ?= postgres://postgres:$(POSTGRES_PASSWORD)@host.docker.internal:5
 PSQL := docker run --rm -e PGPASSWORD=$(POSTGRES_PASSWORD) -v "$(PWD)/infra/supabase:/infra/supabase" $(TEST_DB_IMAGE) psql
 TEST_PSQL := docker exec -e PGPASSWORD=$(TEST_DB_PASSWORD) transit-test-db psql
 
-.PHONY: help dev down logs lint test gen ingest.build ingest feedcheck db.migrate db.seed db.test portal.install portal.dev portal.build tracker.build tracker exporter.build exporter gtfs.validate loadtest.build loadtest docs docs-serve
+.PHONY: help dev down logs lint test gen ingest.build ingest feedcheck db.migrate db.seed db.test portal.install portal.dev portal.build tracker.build tracker exporter.build exporter gtfs.validate loadtest.build loadtest docs docs-serve docs-goldens
 
 help: ## Show this help
 	@grep -E '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-10s\033[0m %s\n", $$1, $$2}'
@@ -68,6 +68,10 @@ docs-serve: ## Serve the docs site locally with live reload
 	python3 docs-site/scripts/sync_docs.py
 	docs-site/scripts/build_api_docs.sh
 	python3 -m mkdocs serve -f docs-site/mkdocs.yml
+
+docs-goldens: ## Regenerate Flutter golden screenshots used by the docs site
+	cd apps/rider_app && flutter test --update-goldens test/golden/
+	cd apps/driver_app && flutter test --update-goldens test/golden/
 
 portal.install: ## Install portal (Next.js admin console) dependencies
 	pnpm -C apps/portal install

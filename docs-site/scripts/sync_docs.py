@@ -64,7 +64,27 @@ def sync_packages() -> None:
         (packages_dst / f"{pkg_dir.name}.md").write_text(text)
 
 
+def sync_screenshots() -> None:
+    screenshots_dst = DOCS / "assets" / "screenshots"
+    reset(screenshots_dst)
+
+    for app in ("rider_app", "driver_app"):
+        src = ROOT / "apps" / app / "test" / "golden" / "goldens"
+        dst = screenshots_dst / app
+        dst.mkdir(parents=True)
+        for f in sorted(src.glob("*.png")):
+            shutil.copyfile(f, dst / f.name)
+
+    portal_src = ROOT / "docs-site" / "scripts" / ".portal-shots"
+    if portal_src.is_dir():
+        dst = screenshots_dst / "portal"
+        dst.mkdir(parents=True)
+        for f in sorted(portal_src.glob("*.png")):
+            shutil.copyfile(f, dst / f.name)
+
+
 if __name__ == "__main__":
     sync_wiki()
     sync_packages()
-    print("Synced internal-docs/ and packages/*/README.md into docs-site/docs/")
+    sync_screenshots()
+    print("Synced internal-docs/, packages/*/README.md and screenshots into docs-site/docs/")

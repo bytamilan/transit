@@ -32,6 +32,9 @@ nav:
   - Home: index.md
   - Features: features.md
   - API Reference: api/index.html
+  - Apps:
+      - Rider app: apps/rider_app.md
+      - Driver app: apps/driver_app.md
   - Packages:
       - transit_core: packages/transit_core.md
       - transit_api_client: packages/transit_api_client.md
