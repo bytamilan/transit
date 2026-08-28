@@ -8,6 +8,7 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
+	"reflect"
 	"strconv"
 	"time"
 
@@ -399,7 +400,7 @@ func (f *Fleet) upsertDriver(ctx context.Context, actor auth.Actor, in driverInp
 		return uuid.Nil, http.StatusBadRequest, err
 	}
 	if userID == nil {
-		if f.Inviter == nil {
+		if isNilDriverInviter(f.Inviter) {
 			return uuid.Nil, http.StatusBadRequest, errNoInviterConfigured
 		}
 		if in.Email == "" && in.Phone == "" {
@@ -439,6 +440,22 @@ func (f *Fleet) upsertDriver(ctx context.Context, actor auth.Actor, in driverInp
 	}
 	f.audit(nil, actor, "upsert", "driver_profiles", nil, map[string]any{"user_id": id})
 	return id, http.StatusOK, nil
+}
+
+// Interfaces can contain a typed nil pointer. Treat those values as an
+// unconfigured inviter too, otherwise calling InviteUser would panic and the
+// HTTP client would observe an empty response.
+func isNilDriverInviter(inviter driverInviter) bool {
+	if inviter == nil {
+		return true
+	}
+	v := reflect.ValueOf(inviter)
+	switch v.Kind() {
+	case reflect.Chan, reflect.Func, reflect.Interface, reflect.Map, reflect.Ptr, reflect.Slice:
+		return v.IsNil()
+	default:
+		return false
+	}
 }
 
 // GetDriver returns a single driver profile.
