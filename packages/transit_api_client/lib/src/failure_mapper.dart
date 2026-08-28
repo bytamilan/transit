@@ -1,3 +1,4 @@
+import 'package:built_value/built_value.dart';
 import 'package:dio/dio.dart';
 import 'package:transit_core/transit_core.dart' as core;
 
@@ -31,7 +32,9 @@ core.Failure failureFrom(Object error) {
         cause: error, context: context);
   }
 
-  if (error is FormatException || error is TypeError) {
+  if (error is FormatException ||
+      error is TypeError ||
+      error is BuiltValueNullFieldError) {
     return core.ParsingFailure(error.toString(), cause: error);
   }
   if (error is ArgumentError) {

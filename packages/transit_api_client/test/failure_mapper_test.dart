@@ -1,3 +1,4 @@
+import 'package:built_value/built_value.dart';
 import 'package:dio/dio.dart';
 import 'package:test/test.dart';
 import 'package:transit_api_client/transit_api_client.dart';
@@ -26,6 +27,10 @@ void main() {
     );
     expect(
         failureFrom(const FormatException('bad JSON')), isA<ParsingFailure>());
+    expect(
+      failureFrom(BuiltValueNullFieldError('Stop', 'stopId')),
+      isA<ParsingFailure>(),
+    );
     expect(failureFrom(StateError('unexpected')), isA<UnknownFailure>());
   });
 
