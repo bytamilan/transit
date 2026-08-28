@@ -43,11 +43,18 @@ func (i *Inviter) InviteUser(ctx context.Context, email, phone string) (uuid.UUI
 		return uuid.Nil, fmt.Errorf("invite requires an email or phone")
 	}
 
-	body := map[string]any{}
+	// GoTrue's /invite endpoint creates the unconfirmed user and sends the
+	// invitation email in one operation. Creating the user through
+	// /admin/users first makes /invite fail with a duplicate-user error.
 	if email != "" {
-		body["email"] = email
-		body["email_confirm"] = false
+		user, err := i.post(ctx, "/invite", map[string]any{"email": email})
+		if err != nil {
+			return uuid.Nil, fmt.Errorf("send invite email: %w", err)
+		}
+		return parseUserID(user)
 	}
+
+	body := map[string]any{}
 	if phone != "" {
 		body["phone"] = phone
 		body["phone_confirm"] = false
@@ -57,17 +64,14 @@ func (i *Inviter) InviteUser(ctx context.Context, email, phone string) (uuid.UUI
 	if err != nil {
 		return uuid.Nil, fmt.Errorf("create gotrue user: %w", err)
 	}
+	return parseUserID(user)
+}
+
+func parseUserID(user *adminUserResponse) (uuid.UUID, error) {
 	id, err := uuid.Parse(user.ID)
 	if err != nil {
 		return uuid.Nil, fmt.Errorf("parse gotrue user id: %w", err)
 	}
-
-	if email != "" {
-		if _, err := i.post(ctx, "/invite", map[string]any{"email": email}); err != nil {
-			return uuid.Nil, fmt.Errorf("send invite email: %w", err)
-		}
-	}
-
 	return id, nil
 }
 

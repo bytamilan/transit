@@ -55,6 +55,10 @@ services:
       GOTRUE_JWT_AUD: authenticated
       CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-http://localhost:3000,http://127.0.0.1:3000,http://localhost:3002,http://127.0.0.1:3002,http://localhost:3003,http://127.0.0.1:3003,http://localhost:3004,http://127.0.0.1:3004}
       GOTRUE_INTERNAL_URL: ${GOTRUE_INTERNAL_URL:-http://auth:9999}
+      # Driver invitations use GoTrue's admin API. `make dev-full` supplies
+      # a short-lived service_role JWT signed with the same JWT_SECRET.
+      GOTRUE_ADMIN_URL: ${GOTRUE_ADMIN_URL:-http://auth:9999}
+      SUPABASE_SERVICE_ROLE_KEY: ${SUPABASE_SERVICE_ROLE_KEY:-}
     ports:
       - "8080:8080"
     depends_on:

@@ -92,6 +92,11 @@ This adds four more services behind Compose's `supabase` profile:
 | `rest` | `postgrest/postgrest:v12.2.3` | `3000` (admin: `3001`) | Direct REST/SQL over the `transit` schema |
 | `realtime` | `supabase/realtime:v2.34.2` | `4000` | Postgres change feed — no active consumers yet, healthcheck only |
 
+`make dev-full` also wires the API to GoTrue's admin endpoint and mints a
+short-lived `service_role` JWT from the shared local `JWT_SECRET`. This is
+needed for the portal's **Invite / save driver** action; the token is passed to
+the API container only and is not exposed to either app.
+
 `make dev` and `make dev-full` **share the same `db` volume** (`db_data`)
 — you don't lose data switching between them, but the Supabase services
 won't work correctly until `db-init` has run at least once (it runs

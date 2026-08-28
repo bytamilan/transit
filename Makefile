@@ -38,7 +38,10 @@ help: ## Show this help
 dev: .env ## Boot the core local stack (Postgres + PostGIS + API)
 	$(COMPOSE) up --build
 
-dev-full: ## Boot the full local stack including Supabase Auth, REST and Realtime
+dev-full: .env ## Boot the full local stack including Supabase Auth, REST and Realtime
+	@service_role_key="$$(python3 docs-site/scripts/mint_service_role_jwt.py)"; \
+	export GOTRUE_ADMIN_URL="$${GOTRUE_ADMIN_URL:-http://auth:9999}"; \
+	export SUPABASE_SERVICE_ROLE_KEY="$$service_role_key"; \
 	$(COMPOSE) --profile supabase up --build
 
 down: ## Stop the local stack and drop volumes
