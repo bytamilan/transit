@@ -1049,7 +1049,7 @@ first thing a real reader should do.
 | **M3 — Public alpha** | 5 | Rider app demoable for any seeded agency |
 | **M4 — Operations alpha** | 6–7 | Agency runs fleet + drivers; phones are the AVL |
 | **M5 — Live operations** | 8–9 | Authoritative realtime + dispatch, end to end |
-| **M6 — Open-data v1** | 10–11 | Standards feeds out; planner; the DataMall equivalent |
+| **M6 — Open-data v1** | 10–11 | Standards feeds out; planner; public data portal |
 | **M7 — v1.0** | 12 | Hardened, self-hostable, documented, released |
 
 ## Risk register (top items)

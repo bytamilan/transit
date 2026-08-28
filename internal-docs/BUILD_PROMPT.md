@@ -1,8 +1,8 @@
 # Build Prompt — Transit: A Deployable Land Transport Data Platform
 
-> A land transport data platform any transport authority can deploy — inspired by
-> Singapore's LTA DataMall, but agency-agnostic. Paste this whole file into
-> Claude Code as the opening brief. Execute in phases.
+> A land transport data platform any transport authority can deploy —
+> agency-agnostic. Paste this whole file into Claude Code as the opening brief.
+> Execute in phases.
 
 ---
 
@@ -49,7 +49,7 @@ behaviour in §4.
 - Favourites, arrival alerts, full offline fallback to the static timetable
 
 **C. Data Portal + Admin Console (web)**
-The DataMall equivalent plus the agency's operational back office:
+The public-data portal plus the agency's operational back office:
 - `/datasets` — every exposed dataset: schema, frequency, sample payload, licence
 - `/request` — access request (organisation, use case, datasets, QPS) → review queue → issued API key
 - `/docs` — rendered from OpenAPI with a try-it console
@@ -252,7 +252,7 @@ Incident reporting is likewise one tap plus optional voice note, never typing.
 ## 5. Upstream Adapters
 
 `services/api/internal/adapters/` — each implements one interface and normalises
-to GTFS. The LTA DataMall integration is one adapter among several, not the
+to GTFS. Vendor-specific integrations are optional adapters, not the
 architecture.
 
 | Adapter | Covers | Notes |
@@ -263,7 +263,6 @@ architecture.
 | `netex` | EU national access points | Static counterpart to SIRI |
 | `transxchange` | UK | Legacy but widespread |
 | `gbfs` | Micromobility, anywhere | Bikeshare, scooters, docks |
-| `datamall` | Singapore | Proprietary; the reference vendor adapter |
 | `manual` | **Agencies with no digital data at all** | Timetables entered in `/admin`, vehicles tracked only by the driver app |
 
 The `manual` adapter matters more than it looks. Minibuses, jeepneys, matatus
@@ -284,9 +283,8 @@ type Adapter interface {
 Each adapter needs exponential backoff, a circuit breaker, an upstream-latency
 metric, and a `sync_runs` audit row. Upsert by natural key — never
 truncate-and-reload a table the apps read. Rate-limit strategy belongs in the
-adapter: DataMall's bus arrival is per-stop and on-demand so it declares
-read-through-with-TTL; a SIRI-VM feed declares a 30s tick. The scheduler honours
-what each adapter asks for.
+adapter: an on-demand arrival feed can declare read-through-with-TTL; a SIRI-VM
+feed declares a 30s tick. The scheduler honours what each adapter asks for.
 
 ---
 

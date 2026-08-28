@@ -11,7 +11,7 @@ import (
 )
 
 // Adapter is implemented by every upstream adapter (gtfs_static, gtfs_rt,
-// datamall, siri, etc.). It matches the interface in docs/BUILD_PROMPT.md §5.
+// siri, etc.). It matches the interface in docs/BUILD_PROMPT.md §5.
 type Adapter interface {
 	Name() string
 	Capabilities() Capabilities

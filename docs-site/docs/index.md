@@ -5,11 +5,10 @@ authority — national, state, or municipal — can self-host Transit and get a
 driver app, a rider app, a data portal + admin console, and standards-compliant
 GTFS / GTFS-Realtime / GBFS feeds, all driven from one agency-config document.
 
-Inspired by Singapore's LTA DataMall, but agency-agnostic: nothing country-,
-currency-, language-, timezone-, map-provider-, fare-rule- or vendor-specific
-exists outside an adapter or a config file. **GTFS is the canonical internal
-model** — every upstream adapter normalises into it, every output serialises
-out of it.
+**GTFS is the canonical internal model** — every upstream adapter normalises
+into it, every output serialises out of it. Nothing country-, currency-,
+language-, timezone-, map-provider-, fare-rule- or vendor-specific exists
+outside an adapter or a config file.
 
 ## Stack
 

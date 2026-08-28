@@ -2,7 +2,7 @@
 
 | Package | Responsibility |
 |---|---|
-| `adapters/` | One package per upstream standard (gtfs_static, gtfs_rt, siri, netex, transxchange, gbfs, datamall, manual); each implements the `Adapter` interface and normalises into GTFS (build brief §5) |
+| `adapters/` | One package per upstream standard (gtfs_static, gtfs_rt, siri, netex, transxchange, gbfs, manual); each implements the `Adapter` interface and normalises into GTFS (build brief §5) |
 | `ingest/` | Scheduling, normalisation, dedupe. Upsert by natural key — never truncate-and-reload |
 | `gtfs/` | Canonical model, validation, export. CI runs MobilityData `gtfs-validator` against fixtures |
 | `httpapi/` | Handlers, auth (Supabase JWT + hashed API key), centralised table-driven RBAC, quotas |

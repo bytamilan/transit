@@ -10,11 +10,10 @@ authority — national, state, or municipal — can self-host Transit and get:
 | **Data Portal + Admin Console** (Next.js) | Open-data portal (datasets, API keys, docs, usage) plus the operational back office: fleet, routes, drivers, duty assignment, live dispatch board. |
 | **Standards-compliant feeds** | Publishable `GTFS.zip` and GTFS-Realtime (TripUpdates, VehiclePositions, ServiceAlerts), plus GBFS — consumable by Google Maps, Moovit, Citymapper and OpenTripPlanner with zero integration work. |
 
-Inspired by Singapore's LTA DataMall, but **agency-agnostic**: nothing
-country-, currency-, language-, timezone-, map-provider-, fare-rule- or
-vendor-specific exists outside an adapter or a config file. **GTFS is the
-canonical internal model** — every upstream adapter normalises into it, every
-output serialises out of it.
+**GTFS is the canonical internal model** — every upstream adapter normalises
+into it, every output serialises out of it. Nothing country-, currency-,
+language-, timezone-, map-provider-, fare-rule- or vendor-specific exists
+outside an adapter or a config file.
 
 ## The docs
 

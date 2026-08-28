@@ -5,7 +5,7 @@ Accepted
 
 ## Context
 Phase 3 introduces upstream feed adapters (GTFS static, GTFS realtime, and later
-Datamall/SIRI). Each adapter decodes a different upstream format and normalises
+SIRI). Each adapter decodes a different upstream format and normalises
 it into the canonical transit schema. We need a process that:
 
 1. Knows which feeds are configured for each agency.
