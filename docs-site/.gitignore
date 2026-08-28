@@ -3,3 +3,6 @@ docs/packages/
 docs/wiki/
 docs/api/
 docs/assets/screenshots/
+scripts/.portal-shots-tmp/
+scripts/node_modules/
+scripts/test-results/

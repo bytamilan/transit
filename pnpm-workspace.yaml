@@ -1,2 +1,5 @@
 packages:
   - "apps/portal"
+  - "docs-site/scripts"
+allowBuilds:
+  unrs-resolver: false

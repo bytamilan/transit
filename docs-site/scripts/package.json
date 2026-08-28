@@ -1,0 +1,11 @@
+{
+  "name": "docs-screenshots",
+  "private": true,
+  "version": "0.1.0",
+  "scripts": {
+    "shots": "playwright test"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.48.0"
+  }
+}
