@@ -55,8 +55,7 @@ class AgencyTheme {
   }
 
   static Color _parseColor(String hex, {required Color fallback}) {
-    final match =
-        RegExp(r'^#?([0-9a-fA-F]{6}|[0-9a-fA-F]{8})$').firstMatch(hex);
+    final match = RegExp(r'^#([0-9a-fA-F]{6}|[0-9a-fA-F]{8})$').firstMatch(hex);
     if (match == null) return fallback;
 
     final value = match.group(1)!;

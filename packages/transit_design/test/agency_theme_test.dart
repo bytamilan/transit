@@ -43,6 +43,12 @@ void main() {
     expect(theme.primaryColor, const Color(0xFF000000));
   });
 
+  test('uses the primary fallback when branding omits the hash prefix', () {
+    final theme = AgencyTheme.fromJson({'primary': '123456'});
+
+    expect(theme.primaryColor, const Color(0xFF000000));
+  });
+
   test('uses the secondary fallback for malformed secondary branding', () {
     final theme = AgencyTheme.fromJson({'secondary': '#123'});
 
