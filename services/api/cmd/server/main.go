@@ -13,6 +13,7 @@ import (
 	"github.com/bytamilan/transit/services/api/internal/dispatch"
 	"github.com/bytamilan/transit/services/api/internal/generated/oapi"
 	"github.com/bytamilan/transit/services/api/internal/gotrue"
+	"github.com/bytamilan/transit/services/api/internal/httpapi"
 	"github.com/bytamilan/transit/services/api/internal/httpapi/auth"
 	"github.com/bytamilan/transit/services/api/internal/httpapi/handlers"
 	"github.com/bytamilan/transit/services/api/internal/store/agencies"
@@ -151,6 +152,14 @@ func main() {
 	adminAlerts := &handlers.AdminAlerts{Alerts: alertStore, Audit: auditWriter}
 
 	r := chi.NewRouter()
+	r.Use(httpapi.CORS(httpapi.ParseAllowedOrigins(os.Getenv("CORS_ALLOWED_ORIGINS"))))
+	authProxy, err := httpapi.NewAuthProxy(envOr("GOTRUE_INTERNAL_URL", "http://localhost:9999"))
+	if err != nil {
+		slog.Error("failed to build GoTrue proxy", "err", err)
+		os.Exit(1)
+	}
+	r.Handle("/auth/v1", authProxy)
+	r.Handle("/auth/v1/*", authProxy)
 
 	// Every /v0 response is upstream-sourced data (no community/crowdsourced
 	// merge exists yet — see docs/PHASE_PLAN.md Phase 10), so the header is a

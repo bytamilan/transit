@@ -53,6 +53,8 @@ services:
       JWT_SECRET: ${JWT_SECRET:-change-me-in-production}
       API_EXTERNAL_URL: ${API_EXTERNAL_URL:-http://localhost:8000/auth}
       GOTRUE_JWT_AUD: authenticated
+      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-http://localhost:3000,http://127.0.0.1:3000,http://localhost:3002,http://127.0.0.1:3002,http://localhost:3003,http://127.0.0.1:3003,http://localhost:3004,http://127.0.0.1:3004}
+      GOTRUE_INTERNAL_URL: ${GOTRUE_INTERNAL_URL:-http://auth:9999}
     ports:
       - "8080:8080"
     depends_on:
