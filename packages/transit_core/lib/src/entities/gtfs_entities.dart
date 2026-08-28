@@ -3,7 +3,7 @@ import '../value_objects/geo_point.dart';
 import '../value_objects/gtfs_time.dart';
 
 final class Stop {
-  const Stop({
+  Stop({
     required this.stopId,
     required this.stopName,
     this.stopCode,
@@ -13,7 +13,10 @@ final class Stop {
     this.parentStation,
     this.wheelchairBoarding,
     this.platformCode,
-  });
+  }) {
+    _requireNonEmpty(stopId, 'stop_id');
+    _requireNonEmpty(stopName, 'stop_name');
+  }
 
   factory Stop.fromJson(Map<String, dynamic> json) {
     final latitude = _optionalDouble(json, 'stop_lat');
@@ -75,7 +78,7 @@ final class Stop {
 }
 
 final class Route {
-  const Route({
+  Route({
     required this.routeId,
     required this.routeType,
     this.routeShortName,
@@ -85,7 +88,9 @@ final class Route {
     this.routeColor,
     this.routeTextColor,
     this.routeSortOrder,
-  });
+  }) {
+    _requireNonEmpty(routeId, 'route_id');
+  }
 
   factory Route.fromJson(Map<String, dynamic> json) => Route(
         routeId: _requiredString(json, 'route_id'),
@@ -137,7 +142,7 @@ final class Route {
 }
 
 final class Trip {
-  const Trip({
+  Trip({
     required this.tripId,
     required this.routeId,
     required this.serviceId,
@@ -148,7 +153,11 @@ final class Trip {
     this.shapeId,
     this.wheelchairAccessible,
     this.bikesAllowed,
-  });
+  }) {
+    _requireNonEmpty(tripId, 'trip_id');
+    _requireNonEmpty(routeId, 'route_id');
+    _requireNonEmpty(serviceId, 'service_id');
+  }
 
   factory Trip.fromJson(Map<String, dynamic> json) => Trip(
         tripId: _requiredString(json, 'trip_id'),
@@ -204,7 +213,7 @@ final class Trip {
 }
 
 final class StopTime {
-  const StopTime({
+  StopTime({
     required this.tripId,
     required this.stopId,
     required this.stopSequence,
@@ -214,7 +223,10 @@ final class StopTime {
     this.pickupType,
     this.dropOffType,
     this.timepoint,
-  });
+  }) {
+    _requireNonEmpty(tripId, 'trip_id');
+    _requireNonEmpty(stopId, 'stop_id');
+  }
 
   factory StopTime.fromJson(Map<String, dynamic> json) => StopTime(
         tripId: _requiredString(json, 'trip_id'),
@@ -271,6 +283,10 @@ String _requiredString(Map<String, dynamic> json, String key) {
     throw ValidationFailure('$key is required');
   }
   return value;
+}
+
+void _requireNonEmpty(String value, String key) {
+  if (value.trim().isEmpty) throw ValidationFailure('$key is required');
 }
 
 String? _optionalString(Map<String, dynamic> json, String key) {

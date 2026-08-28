@@ -107,4 +107,23 @@ void main() {
       throwsA(isA<ValidationFailure>()),
     );
   });
+
+  test('GTFS constructors reject empty required identifiers and names', () {
+    expect(
+      () => Stop(stopId: '', stopName: ''),
+      throwsA(isA<ValidationFailure>()),
+    );
+    expect(
+      () => Route(routeId: '', routeType: 3),
+      throwsA(isA<ValidationFailure>()),
+    );
+    expect(
+      () => Trip(tripId: '', routeId: 'R1', serviceId: 'weekday'),
+      throwsA(isA<ValidationFailure>()),
+    );
+    expect(
+      () => StopTime(tripId: 'T1', stopId: '', stopSequence: 1),
+      throwsA(isA<ValidationFailure>()),
+    );
+  });
 }

@@ -96,5 +96,15 @@ void main() {
         throwsA(isA<ValidationFailure>()),
       );
     });
+
+    test('rejects a missing required map provider', () {
+      final json = Map<String, dynamic>.from(configJson)
+        ..remove('map_provider');
+
+      expect(
+        () => AgencyConfig.fromJson(json),
+        throwsA(isA<ValidationFailure>()),
+      );
+    });
   });
 }

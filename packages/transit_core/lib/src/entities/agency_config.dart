@@ -140,7 +140,7 @@ final class AgencyConfig {
         currency: _requiredString(json, 'currency'),
         distanceUnit: _distanceUnit(json['distance_unit']),
         modes: _requiredStringList(json, 'modes'),
-        mapProvider: _mapProvider(json['map_provider']),
+        mapProvider: _mapProvider(_requiredString(json, 'map_provider')),
         license: AgencyLicense.fromJson(_requiredMap(json, 'license')),
         branding: AgencyBranding.fromJson(_requiredMap(json, 'branding')),
         driverOps: json['driver_ops'] == null
