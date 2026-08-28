@@ -13,13 +13,17 @@ class ThemeProvider extends InheritedWidget {
   });
 
   static AgencyTheme of(BuildContext context) {
-    final provider = context.dependOnInheritedWidgetOfExactType<ThemeProvider>();
-    return provider?.agencyTheme ?? const AgencyTheme(primary: '#000000', secondary: '#FFFFFF');
+    final provider =
+        context.dependOnInheritedWidgetOfExactType<ThemeProvider>();
+    return provider?.agencyTheme ??
+        const AgencyTheme(primary: '#000000', secondary: '#FFFFFF');
   }
 
   @override
   bool updateShouldNotify(ThemeProvider oldWidget) {
     return oldWidget.agencyTheme.primary != agencyTheme.primary ||
-        oldWidget.agencyTheme.secondary != agencyTheme.secondary;
+        oldWidget.agencyTheme.secondary != agencyTheme.secondary ||
+        oldWidget.agencyTheme.logoUrl != agencyTheme.logoUrl ||
+        oldWidget.agencyTheme.font != agencyTheme.font;
   }
 }
