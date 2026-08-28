@@ -7,6 +7,14 @@
 
 SET LOCAL search_path TO transit, public, extensions, auth;
 
+-- Must run before any function below is created: CREATE FUNCTION ...
+-- LANGUAGE sql validates the body against the catalog at creation time
+-- (unlike plpgsql, which defers name resolution to first call), so
+-- api_keys.label/revoked_at need to exist before create_api_key/
+-- list_api_keys/revoke_api_key/api_key_lookup are defined.
+ALTER TABLE api_keys ADD COLUMN IF NOT EXISTS label text;
+ALTER TABLE api_keys ADD COLUMN IF NOT EXISTS revoked_at timestamptz;
+
 CREATE OR REPLACE FUNCTION create_api_key(
     _agency_id uuid,
     _key_hash text,
@@ -107,9 +115,6 @@ AS $$
     GROUP BY 1
     ORDER BY 1;
 $$;
-
-ALTER TABLE api_keys ADD COLUMN IF NOT EXISTS label text;
-ALTER TABLE api_keys ADD COLUMN IF NOT EXISTS revoked_at timestamptz;
 
 GRANT EXECUTE ON FUNCTION create_api_key TO transit_app;
 GRANT EXECUTE ON FUNCTION list_api_keys TO transit_app;
