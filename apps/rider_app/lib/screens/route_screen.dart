@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:transit_api_client/transit_api_client.dart';
+import 'package:transit_core/transit_core.dart' as core;
 import 'package:transit_maps/transit_maps.dart';
 import '../providers/agency_provider.dart';
 import '../providers/api_provider.dart';
@@ -18,7 +19,7 @@ class RouteScreen extends ConsumerStatefulWidget {
 
 class _RouteScreenState extends ConsumerState<RouteScreen> {
   late final _api = ref.read(apiClientProvider);
-  late final _map = widget.mapProvider ?? MapLibreProvider();
+  late final _map = widget.mapProvider ?? const MapLibreProvider();
   var _trips = const AsyncValue<List<Trip>>.loading();
   var _selectedTripId = '';
   var _stopTimes = const AsyncValue<List<StopTime>>.loading();
@@ -62,16 +63,22 @@ class _RouteScreenState extends ConsumerState<RouteScreen> {
           SizedBox(
             height: 200,
             child: _map.buildMap(
-              initialLat: agency.config?.branding != null ? 1.2966 : 34.0522,
-              initialLon: agency.config?.branding != null ? 103.7764 : -118.2437,
-              zoom: 13,
-              markers: _stopTimes.valueOrNull?.map((st) => MapMarker(
-                    lat: 0,
-                    lon: 0,
-                    label: st.stopId,
-                  )).toList() ?? [],
-              polylines: [],
-              onTap: null,
+              MapViewOptions(
+                provider: core.MapProviderKind.maplibre,
+                initialLat: agency.config?.branding != null ? 1.2966 : 34.0522,
+                initialLon:
+                    agency.config?.branding != null ? 103.7764 : -118.2437,
+                zoom: 13,
+                markers: _stopTimes.valueOrNull
+                        ?.map((st) => MapMarker(
+                              lat: 0,
+                              lon: 0,
+                              label: st.stopId,
+                            ))
+                        .toList() ??
+                    [],
+                polylines: [],
+              ),
             ),
           ),
           Expanded(

@@ -190,18 +190,11 @@ class FakeDefaultApi extends DefaultApi {
 /// headless flutter test.
 class FakeMapProvider implements MapProvider {
   @override
-  Widget buildMap({
-    required double initialLat,
-    required double initialLon,
-    required double zoom,
-    required List<MapMarker> markers,
-    required List<MapPolyline> polylines,
-    required void Function(double lat, double lon)? onTap,
-  }) {
+  Widget buildMap(MapViewOptions options) {
     return Container(
       color: const Color(0xFFE0E0E0),
       alignment: Alignment.center,
-      child: Text('Map (${markers.length} stops)'),
+      child: Text('Map (${options.markers.length} stops)'),
     );
   }
 }

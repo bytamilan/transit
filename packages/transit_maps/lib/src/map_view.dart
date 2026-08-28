@@ -6,36 +6,51 @@ import 'map_provider.dart';
 class MapLibreProvider implements MapProvider {
   final String styleUrl;
 
-  MapLibreProvider({
+  const MapLibreProvider({
     this.styleUrl = 'https://demotiles.maplibre.org/style.json',
   });
 
   @override
-  Widget buildMap({
-    required double initialLat,
-    required double initialLon,
-    required double zoom,
-    required List<MapMarker> markers,
-    required List<MapPolyline> polylines,
-    required void Function(double lat, double lon)? onTap,
-  }) {
+  Widget buildMap(MapViewOptions options) {
+    MapLibreMapController? controller;
+
+    Future<void> addAnnotations() async {
+      final mapController = controller;
+      if (mapController == null) return;
+      for (final marker in options.markers) {
+        await mapController.addSymbol(SymbolOptions(
+          geometry: LatLng(marker.lat, marker.lon),
+          iconImage: 'marker-15',
+          iconColor: marker.color == null ? null : _hexColor(marker.color!),
+          textField: marker.label,
+          textOffset: const Offset(0, 1.5),
+        ));
+      }
+      for (final polyline in options.polylines) {
+        await mapController.addLine(LineOptions(
+          geometry: polyline.points
+              .map((point) => LatLng(point.lat, point.lon))
+              .toList(growable: false),
+          lineColor: _hexColor(polyline.color),
+          lineOpacity: polyline.color.a,
+          lineWidth: polyline.width,
+        ));
+      }
+    }
+
     return MapLibreMap(
       styleString: styleUrl,
       initialCameraPosition: CameraPosition(
-        target: LatLng(initialLat, initialLon),
-        zoom: zoom,
+        target: LatLng(options.initialLat, options.initialLon),
+        zoom: options.zoom,
       ),
-      onMapCreated: (controller) async {
-        for (var i = 0; i < markers.length; i++) {
-          final m = markers[i];
-          await controller.addSymbol(SymbolOptions(
-            geometry: LatLng(m.lat, m.lon),
-            iconImage: 'marker-15',
-            textField: m.label,
-            textOffset: const Offset(0, 1.5),
-          ));
-        }
-      },
+      onMapCreated: (createdController) => controller = createdController,
+      onStyleLoadedCallback: addAnnotations,
+      onMapClick: (_, latLng) =>
+          options.onMapClick?.call(latLng.latitude, latLng.longitude),
     );
   }
 }
+
+String _hexColor(Color color) =>
+    '#${(color.r * 255).round().toRadixString(16).padLeft(2, '0')}${(color.g * 255).round().toRadixString(16).padLeft(2, '0')}${(color.b * 255).round().toRadixString(16).padLeft(2, '0')}';

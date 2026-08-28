@@ -11,5 +11,12 @@ dependencies:
   flutter:
     sdk: flutter
   maplibre_gl: ^0.20.0
+  transit_core:
+    path: ../transit_core
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  test: ^1.25.0
 
 flutter:

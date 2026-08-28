@@ -19,6 +19,8 @@ dependencies:
     path: ../../packages/transit_design
   transit_maps:
     path: ../../packages/transit_maps
+  transit_core:
+    path: ../../packages/transit_core
   shared_preferences: ^2.3.0
   geolocator: ^13.0.0
 
