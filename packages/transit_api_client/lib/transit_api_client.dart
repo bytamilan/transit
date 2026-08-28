@@ -8,6 +8,7 @@ export 'package:transit_api_client/src/auth/basic_auth.dart';
 export 'package:transit_api_client/src/auth/bearer_auth.dart';
 export 'package:transit_api_client/src/auth/oauth.dart';
 export 'package:transit_api_client/src/serializers.dart';
+export 'package:transit_api_client/src/domain_mappers.dart';
 export 'package:transit_api_client/src/model/date.dart';
 
 export 'package:transit_api_client/src/api/default_api.dart';
@@ -29,4 +30,3 @@ export 'package:transit_api_client/src/model/stop_time.dart';
 export 'package:transit_api_client/src/model/stop_time_list.dart';
 export 'package:transit_api_client/src/model/trip.dart';
 export 'package:transit_api_client/src/model/trip_list.dart';
-
