@@ -10,6 +10,8 @@ import (
 	"os"
 	"time"
 
+	"github.com/bytamilan/transit/services/api/internal/adapters"
+	"github.com/bytamilan/transit/services/api/internal/adapters/osm"
 	"github.com/bytamilan/transit/services/api/internal/dispatch"
 	"github.com/bytamilan/transit/services/api/internal/generated/oapi"
 	"github.com/bytamilan/transit/services/api/internal/gotrue"
@@ -107,6 +109,13 @@ func main() {
 		Trips:    tripStore,
 		Calendar: calendar.New(pool),
 		Audit:    auditWriter,
+	}
+	stopsImport := &handlers.StopsImport{
+		Stops: stops.NewWriter(pool),
+		Overpass: osm.NewClient(&adapters.DefaultFetcher{
+			Client: &http.Client{Timeout: 60 * time.Second},
+		}),
+		Audit: auditWriter,
 	}
 	dutyStore := duty.New(pool)
 	pingStore := pings.New(pool)
@@ -232,6 +241,10 @@ func main() {
 		r.Put("/admin/trips/{trip_id}/stop_times", routeEditor.ReplaceTripStopTimes)
 		r.Get("/admin/calendars", routeEditor.ListCalendars)
 		r.Post("/admin/calendars", routeEditor.UpsertCalendar)
+
+		// OSM bus-stop import (preview against Overpass, then confirm-upsert).
+		r.Post("/admin/stops/import/osm/preview", stopsImport.PreviewOSMImport)
+		r.Post("/admin/stops/import/osm", stopsImport.ImportOSMStops)
 
 		r.Get("/admin/blocks", roster.ListBlocks)
 		r.Post("/admin/blocks", roster.UpsertBlock)

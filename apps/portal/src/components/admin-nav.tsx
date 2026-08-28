@@ -10,6 +10,7 @@ import {
   Bus,
   Users,
   Route as RouteIcon,
+  MapPin,
   Megaphone,
   KeyRound,
   Database,
@@ -54,6 +55,7 @@ export const NAV_SECTIONS: NavSection[] = [
       { href: "/admin/vehicles", label: "Vehicles", icon: Bus },
       { href: "/admin/drivers", label: "Drivers", icon: Users },
       { href: "/admin/routes", label: "Routes & Timetables", icon: RouteIcon },
+      { href: "/admin/stops", label: "Stops", icon: MapPin },
     ],
   },
   {
