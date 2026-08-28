@@ -2,7 +2,6 @@
 // golden test in test/golden/ imports this file instead of re-declaring
 // fixtures or a fake API client.
 import 'package:dio/dio.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:transit_api_client/transit_api_client.dart';
 
 import 'package:rider_app/models/app_state.dart';
