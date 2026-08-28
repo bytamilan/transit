@@ -128,15 +128,21 @@ Three paths, depending on what you already have:
 
 ## 6. Deploy
 
-- **Reference infrastructure**: `deploy/terraform/environments/reference`
-  provisions one region's worth of AWS infra (VPC, EKS, a Postgres backup
-  bucket) — see that directory's README for what it does and doesn't
-  cover, and its explicit "never run this session" caveat.
-- **Application workloads**: `deploy/helm/transit` deploys the API,
-  ingestor, tracker, exporter and portal onto that cluster — same caveat,
-  see its README.
+Step-by-step deployment guides, from a laptop up to a real production
+rollout:
+
+- **[Deploying locally](../runbooks/deploy-local.md)** — `make dev`, the
+  full stack, running the Flutter apps and portal against it.
+- **[Deploying the dev/staging cloud environment](../runbooks/deploy-dev-staging.md)**
+  — provisioning `deploy/terraform/environments/reference` and installing
+  `deploy/helm/transit`.
+- **[Deploying to production](../runbooks/deploy-production.md)** — what's
+  stricter for a real, customer-facing environment.
+- **[Upgrading & releasing](../runbooks/upgrading.md)** — versioning, the
+  `vX.Y.Z` tag → GHCR image pipeline, and rolling a new release out.
 - **Backups**: set up the CronJob in
-  `docs/runbooks/backup-restore.md` before go-live, not after an incident.
+  [`backup-restore.md`](../runbooks/backup-restore.md) before go-live, not
+  after an incident.
 - **Observability**: `deploy/observability/README.md` — traces are wired
   into every binary already; point `OTEL_EXPORTER_OTLP_ENDPOINT` at a
   collector once you have one.

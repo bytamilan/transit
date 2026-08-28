@@ -52,5 +52,9 @@ nav:
           - "0004 — Ingest scheduler": wiki/adr/0004-ingest-scheduler.md
           - "0005 — GTFS library choice": wiki/adr/0005-gtfs-library-choice.md
       - Runbooks:
+          - Deploying locally: wiki/runbooks/deploy-local.md
+          - Deploying dev/staging: wiki/runbooks/deploy-dev-staging.md
+          - Deploying to production: wiki/runbooks/deploy-production.md
+          - Upgrading & releasing: wiki/runbooks/upgrading.md
           - Backup & restore: wiki/runbooks/backup-restore.md
           - Migrations: wiki/runbooks/migrations.md
