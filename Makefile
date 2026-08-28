@@ -60,9 +60,11 @@ test: ## Run Go, Flutter (driver_app + rider_app) and portal suites — brief §
 	pnpm -C apps/portal build
 
 docs: ## Build the static docs site into docs-site/site (needs: pip install -r docs-site/requirements.txt)
+	python3 docs-site/scripts/sync_docs.py
 	python3 -m mkdocs build --strict -f docs-site/mkdocs.yml
 
 docs-serve: ## Serve the docs site locally with live reload
+	python3 docs-site/scripts/sync_docs.py
 	python3 -m mkdocs serve -f docs-site/mkdocs.yml
 
 portal.install: ## Install portal (Next.js admin console) dependencies

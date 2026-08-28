@@ -31,3 +31,21 @@ markdown_extensions:
 nav:
   - Home: index.md
   - Features: features.md
+  - Packages:
+      - transit_core: packages/transit_core.md
+      - transit_api_client: packages/transit_api_client.md
+      - transit_design: packages/transit_design.md
+      - transit_maps: packages/transit_maps.md
+      - transit_telemetry: packages/transit_telemetry.md
+  - Wiki:
+      - Onboarding: wiki/onboarding.md
+      - ADRs:
+          - Overview: wiki/adr/README.md
+          - "0001 — Supabase self-host images": wiki/adr/0001-supabase-self-host-images.md
+          - "0002 — Stop times after midnight": wiki/adr/0002-stop-times-after-midnight.md
+          - "0003 — Custom access token hook": wiki/adr/0003-custom-access-token-hook.md
+          - "0004 — Ingest scheduler": wiki/adr/0004-ingest-scheduler.md
+          - "0005 — GTFS library choice": wiki/adr/0005-gtfs-library-choice.md
+      - Runbooks:
+          - Backup & restore: wiki/runbooks/backup-restore.md
+          - Migrations: wiki/runbooks/migrations.md
