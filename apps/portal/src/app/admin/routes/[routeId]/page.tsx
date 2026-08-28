@@ -2,10 +2,40 @@
 
 import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
+import Link from "next/link";
 import { apiFetch, ApiError } from "@/lib/api";
+import {
+  ArrowLeft,
+  Route as RouteIcon,
+  Plus,
+  Trash2,
+  Check,
+  AlertTriangle,
+  Clock,
+  MapPin,
+  Save,
+  Layers,
+} from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
+import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
 
-type Trip = { trip_id: string; route_id: string; service_id: string; trip_headsign?: string; block_id?: string };
-type StopTime = { stop_id: string; arrival_time: string; departure_time: string; stop_sequence: number };
+type Trip = {
+  trip_id: string;
+  route_id: string;
+  service_id: string;
+  trip_headsign?: string;
+  block_id?: string;
+};
+
+type StopTime = {
+  stop_id: string;
+  arrival_time: string;
+  departure_time: string;
+  stop_sequence: number;
+};
 
 const emptyTrip = { trip_id: "", service_id: "weekday", trip_headsign: "", block_id: "" };
 const emptyStopTime: StopTime = { stop_id: "", arrival_time: "", departure_time: "", stop_sequence: 1 };
@@ -19,6 +49,9 @@ export default function RouteTripsPage() {
   const [selectedTrip, setSelectedTrip] = useState<string | null>(null);
   const [stopTimes, setStopTimes] = useState<StopTime[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState<string | null>(null);
+  const [showAddTrip, setShowAddTrip] = useState(false);
+  const [isSavingStops, setIsSavingStops] = useState(false);
 
   async function loadTrips() {
     try {
@@ -36,8 +69,12 @@ export default function RouteTripsPage() {
 
   async function loadStopTimes(tripId: string) {
     setSelectedTrip(tripId);
+    setError(null);
+    setSuccess(null);
     try {
-      const st = await apiFetch<{ items: StopTime[] }>(`/admin/trips/${encodeURIComponent(tripId)}/stop_times`);
+      const st = await apiFetch<{ items: StopTime[] }>(
+        `/admin/trips/${encodeURIComponent(tripId)}/stop_times`
+      );
       setStopTimes(st.items?.length ? st.items : [{ ...emptyStopTime }]);
     } catch (e) {
       setError(e instanceof ApiError ? e.message : "failed to load stop times");
@@ -47,12 +84,19 @@ export default function RouteTripsPage() {
   async function saveTrip(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
+    setSuccess(null);
     try {
       await apiFetch("/admin/trips", {
         method: "POST",
-        body: JSON.stringify({ ...tripForm, route_id: routeId, block_id: tripForm.block_id || undefined }),
+        body: JSON.stringify({
+          ...tripForm,
+          route_id: routeId,
+          block_id: tripForm.block_id || undefined,
+        }),
       });
       setTripForm(emptyTrip);
+      setShowAddTrip(false);
+      setSuccess(`Trip ${tripForm.trip_id} saved.`);
       await loadTrips();
     } catch (e) {
       setError(e instanceof ApiError ? e.message : "failed to save trip");
@@ -66,101 +110,293 @@ export default function RouteTripsPage() {
   async function saveStopTimes() {
     if (!selectedTrip) return;
     setError(null);
+    setSuccess(null);
+    setIsSavingStops(true);
     try {
       const ordered = [...stopTimes]
         .sort((a, b) => a.stop_sequence - b.stop_sequence)
         .map((s) => ({ ...s, stop_sequence: Number(s.stop_sequence) }));
+
       await apiFetch(`/admin/trips/${encodeURIComponent(selectedTrip)}/stop_times`, {
         method: "PUT",
         body: JSON.stringify({ stop_times: ordered }),
       });
+      setSuccess(`Stop sequence for ${selectedTrip} updated successfully.`);
       await loadStopTimes(selectedTrip);
     } catch (e) {
       setError(e instanceof ApiError ? e.message : "failed to save stop times");
+    } finally {
+      setIsSavingStops(false);
     }
   }
 
   return (
-    <div className="max-w-4xl space-y-8">
+    <div className="space-y-6">
+      {/* Back button & Route Header */}
       <div>
-        <h1 className="text-2xl font-semibold">Route {routeId}</h1>
-        <p className="mt-1 text-sm text-slate-600">Trips and stop sequences (GTFS &ldquo;HH:MM:SS&rdquo;, may exceed 24:00:00 for after-midnight service).</p>
+        <Link
+          href="/admin/routes"
+          className="inline-flex items-center gap-1 text-xs font-semibold text-muted-foreground hover:text-foreground mb-3 transition-colors"
+        >
+          <ArrowLeft className="size-3.5" />
+          <span>Back to all routes</span>
+        </Link>
+
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+          <div className="flex items-center gap-3">
+            <div className="flex size-10 items-center justify-center rounded-xl bg-primary text-primary-foreground font-bold">
+              <RouteIcon className="size-5" />
+            </div>
+            <div>
+              <h1 className="text-2xl font-bold tracking-tight text-foreground">
+                Route {routeId}
+              </h1>
+              <p className="text-xs text-muted-foreground">
+                Scheduled trips and GTFS stop sequence timetables.
+              </p>
+            </div>
+          </div>
+
+          <Button
+            size="sm"
+            onClick={() => setShowAddTrip(!showAddTrip)}
+            className="gap-1.5 self-start sm:self-auto"
+          >
+            <Plus className="size-4" />
+            <span>{showAddTrip ? "Close Form" : "Add Trip"}</span>
+          </Button>
+        </div>
       </div>
 
-      {error && <p className="rounded bg-red-50 p-3 text-sm text-red-700">{error}</p>}
+      {error && (
+        <Alert variant="destructive">
+          <AlertTriangle className="size-4" />
+          <AlertTitle>Error</AlertTitle>
+          <AlertDescription>{error}</AlertDescription>
+        </Alert>
+      )}
 
-      <form onSubmit={saveTrip} className="grid grid-cols-4 gap-3 rounded-lg border border-slate-200 bg-white p-4">
-        <input required placeholder="trip_id" value={tripForm.trip_id}
-          onChange={(e) => setTripForm({ ...tripForm, trip_id: e.target.value })}
-          className="rounded border border-slate-300 px-2 py-1.5 text-sm" />
-        <input required placeholder="service_id" value={tripForm.service_id}
-          onChange={(e) => setTripForm({ ...tripForm, service_id: e.target.value })}
-          className="rounded border border-slate-300 px-2 py-1.5 text-sm" />
-        <input placeholder="Headsign" value={tripForm.trip_headsign}
-          onChange={(e) => setTripForm({ ...tripForm, trip_headsign: e.target.value })}
-          className="rounded border border-slate-300 px-2 py-1.5 text-sm" />
-        <input placeholder="block_id" value={tripForm.block_id}
-          onChange={(e) => setTripForm({ ...tripForm, block_id: e.target.value })}
-          className="rounded border border-slate-300 px-2 py-1.5 text-sm" />
-        <button type="submit" className="col-span-4 rounded bg-brand px-3 py-2 text-sm font-medium text-white hover:bg-brand-light">
-          Save trip
-        </button>
-      </form>
+      {success && (
+        <Alert className="border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-400">
+          <Check className="size-4" />
+          <AlertDescription>{success}</AlertDescription>
+        </Alert>
+      )}
 
-      <div className="flex gap-2">
-        {trips.map((t) => (
-          <button key={t.trip_id} onClick={() => loadStopTimes(t.trip_id)}
-            className={`rounded border px-3 py-1.5 text-sm ${selectedTrip === t.trip_id ? "border-brand bg-brand text-white" : "border-slate-300"}`}>
-            {t.trip_id}
-          </button>
-        ))}
-      </div>
+      {/* Add Trip Form */}
+      {showAddTrip && (
+        <Card className="border-primary/30 shadow-sm animate-in fade-in duration-200">
+          <CardHeader>
+            <CardTitle className="text-base">Create Route Trip</CardTitle>
+            <CardDescription className="text-xs">
+              Add a scheduled service trip for this route bound to a service calendar and block.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <form onSubmit={saveTrip} className="space-y-4">
+              <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
+                <div>
+                  <label className="text-xs font-medium text-foreground block mb-1">Trip ID *</label>
+                  <Input
+                    required
+                    placeholder="e.g. T-101-01"
+                    value={tripForm.trip_id}
+                    onChange={(e) => setTripForm({ ...tripForm, trip_id: e.target.value })}
+                  />
+                </div>
 
-      {selectedTrip && (
-        <div className="rounded-lg border border-slate-200 bg-white p-4">
-          <h2 className="font-medium">Stop sequence for {selectedTrip}</h2>
-          <table className="mt-3 w-full text-sm">
-            <thead className="text-left text-slate-500">
-              <tr><th className="p-1">#</th><th className="p-1">Stop ID</th><th className="p-1">Arrival</th><th className="p-1">Departure</th><th /></tr>
-            </thead>
-            <tbody>
-              {stopTimes.map((s, i) => (
-                <tr key={i}>
-                  <td className="p-1">
-                    <input type="number" value={s.stop_sequence} onChange={(e) => updateStopTime(i, { stop_sequence: Number(e.target.value) })}
-                      className="w-14 rounded border border-slate-300 px-1 py-1" />
-                  </td>
-                  <td className="p-1">
-                    <input value={s.stop_id} onChange={(e) => updateStopTime(i, { stop_id: e.target.value })}
-                      className="rounded border border-slate-300 px-1 py-1" />
-                  </td>
-                  <td className="p-1">
-                    <input placeholder="HH:MM:SS" value={s.arrival_time} onChange={(e) => updateStopTime(i, { arrival_time: e.target.value })}
-                      className="w-24 rounded border border-slate-300 px-1 py-1" />
-                  </td>
-                  <td className="p-1">
-                    <input placeholder="HH:MM:SS" value={s.departure_time} onChange={(e) => updateStopTime(i, { departure_time: e.target.value })}
-                      className="w-24 rounded border border-slate-300 px-1 py-1" />
-                  </td>
-                  <td className="p-1">
-                    <button onClick={() => setStopTimes((rows) => rows.filter((_, idx) => idx !== i))} className="text-red-600">✕</button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-          <div className="mt-3 flex gap-2">
-            <button
-              onClick={() => setStopTimes((rows) => [...rows, { ...emptyStopTime, stop_sequence: rows.length + 1 }])}
-              className="rounded border border-slate-300 px-3 py-1.5 text-sm"
-            >
-              Add stop
-            </button>
-            <button onClick={saveStopTimes} className="rounded bg-brand px-3 py-1.5 text-sm font-medium text-white hover:bg-brand-light">
-              Save stop sequence
-            </button>
+                <div>
+                  <label className="text-xs font-medium text-foreground block mb-1">Service ID *</label>
+                  <Input
+                    required
+                    placeholder="e.g. weekday, weekend"
+                    value={tripForm.service_id}
+                    onChange={(e) => setTripForm({ ...tripForm, service_id: e.target.value })}
+                  />
+                </div>
+
+                <div>
+                  <label className="text-xs font-medium text-foreground block mb-1">Trip Headsign</label>
+                  <Input
+                    placeholder="e.g. Broadway / Downtown"
+                    value={tripForm.trip_headsign}
+                    onChange={(e) => setTripForm({ ...tripForm, trip_headsign: e.target.value })}
+                  />
+                </div>
+
+                <div>
+                  <label className="text-xs font-medium text-foreground block mb-1">Block ID (Roster)</label>
+                  <Input
+                    placeholder="e.g. B-101-M"
+                    value={tripForm.block_id}
+                    onChange={(e) => setTripForm({ ...tripForm, block_id: e.target.value })}
+                  />
+                </div>
+              </div>
+
+              <div className="flex justify-end gap-2 pt-2">
+                <Button type="button" variant="outline" size="sm" onClick={() => setShowAddTrip(false)}>
+                  Cancel
+                </Button>
+                <Button type="submit" size="sm">
+                  Save Trip
+                </Button>
+              </div>
+            </form>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Trips Selector Tabs */}
+      <div className="space-y-2">
+        <div className="flex items-center justify-between">
+          <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
+            <Layers className="size-3.5 text-primary" />
+            <span>Select Trip to Edit Stop Sequences ({trips.length})</span>
           </div>
         </div>
+
+        {trips.length === 0 ? (
+          <p className="text-xs text-muted-foreground p-4 bg-muted/20 rounded-xl">
+            No trips configured for this route yet. Click &ldquo;Add Trip&rdquo; to create one.
+          </p>
+        ) : (
+          <div className="flex flex-wrap gap-2">
+            {trips.map((t) => {
+              const active = selectedTrip === t.trip_id;
+              return (
+                <button
+                  key={t.trip_id}
+                  onClick={() => loadStopTimes(t.trip_id)}
+                  className={`flex flex-col items-start px-3.5 py-2 rounded-xl text-left border transition-all ${
+                    active
+                      ? "border-primary bg-primary text-primary-foreground shadow-xs"
+                      : "border-border bg-card text-foreground hover:bg-muted"
+                  }`}
+                >
+                  <span className="font-mono text-xs font-bold">{t.trip_id}</span>
+                  <span className={`text-[10px] ${active ? "text-primary-foreground/80" : "text-muted-foreground"}`}>
+                    {t.trip_headsign || t.service_id}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        )}
+      </div>
+
+      {/* Stop Sequence Editor */}
+      {selectedTrip && (
+        <Card className="border-primary/20 shadow-sm animate-in fade-in duration-200">
+          <CardHeader className="flex flex-row items-center justify-between pb-3">
+            <div>
+              <CardTitle className="text-base font-semibold">
+                Stop Timetable for Trip <code className="font-mono text-primary">{selectedTrip}</code>
+              </CardTitle>
+              <CardDescription className="text-xs">
+                GTFS time standard format &ldquo;HH:MM:SS&rdquo; (can exceed 24:00:00 for overnight runs).
+              </CardDescription>
+            </div>
+          </CardHeader>
+
+          <CardContent className="space-y-4">
+            <div className="rounded-xl border border-border/80 overflow-x-auto">
+              <table className="w-full text-xs">
+                <thead className="bg-muted/50 text-left font-semibold text-muted-foreground">
+                  <tr>
+                    <th className="p-2.5 w-16">Seq #</th>
+                    <th className="p-2.5">Stop ID</th>
+                    <th className="p-2.5 w-32">Arrival Time</th>
+                    <th className="p-2.5 w-32">Departure Time</th>
+                    <th className="p-2.5 w-12 text-center"></th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-border/60">
+                  {stopTimes.map((s, i) => (
+                    <tr key={i} className="hover:bg-muted/20">
+                      <td className="p-2">
+                        <Input
+                          type="number"
+                          value={s.stop_sequence}
+                          onChange={(e) => updateStopTime(i, { stop_sequence: Number(e.target.value) })}
+                          className="h-8 text-xs font-mono w-16"
+                        />
+                      </td>
+
+                      <td className="p-2">
+                        <Input
+                          placeholder="e.g. STOP_101"
+                          value={s.stop_id}
+                          onChange={(e) => updateStopTime(i, { stop_id: e.target.value })}
+                          className="h-8 text-xs font-mono"
+                        />
+                      </td>
+
+                      <td className="p-2">
+                        <Input
+                          placeholder="08:30:00"
+                          value={s.arrival_time}
+                          onChange={(e) => updateStopTime(i, { arrival_time: e.target.value })}
+                          className="h-8 text-xs font-mono w-32"
+                        />
+                      </td>
+
+                      <td className="p-2">
+                        <Input
+                          placeholder="08:31:00"
+                          value={s.departure_time}
+                          onChange={(e) => updateStopTime(i, { departure_time: e.target.value })}
+                          className="h-8 text-xs font-mono w-32"
+                        />
+                      </td>
+
+                      <td className="p-2 text-center">
+                        <Button
+                          variant="ghost"
+                          size="icon-xs"
+                          onClick={() => setStopTimes((rows) => rows.filter((_, idx) => idx !== i))}
+                          className="text-muted-foreground hover:text-destructive"
+                          title="Remove Stop"
+                        >
+                          <Trash2 className="size-3.5" />
+                        </Button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            <div className="flex items-center justify-between pt-2">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() =>
+                  setStopTimes((rows) => [
+                    ...rows,
+                    { ...emptyStopTime, stop_sequence: rows.length + 1 },
+                  ])
+                }
+                className="gap-1.5 text-xs"
+              >
+                <Plus className="size-3.5" />
+                <span>Add Stop</span>
+              </Button>
+
+              <Button
+                type="button"
+                size="sm"
+                onClick={saveStopTimes}
+                disabled={isSavingStops}
+                className="gap-1.5 text-xs"
+              >
+                <Save className="size-3.5" />
+                <span>{isSavingStops ? "Saving Sequence..." : "Save Stop Sequence"}</span>
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
       )}
     </div>
   );

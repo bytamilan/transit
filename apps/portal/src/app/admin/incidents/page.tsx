@@ -2,6 +2,19 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { apiFetch, ApiError } from "@/lib/api";
+import {
+  AlertOctagon,
+  CheckCircle2,
+  Clock,
+  AlertTriangle,
+  Check,
+  Filter,
+} from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { Table, TableHeader, TableBody, TableHead, TableRow, TableCell } from "@/components/ui/table";
+import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
 
 type Incident = {
   id: string;
@@ -12,17 +25,40 @@ type Incident = {
   resolved_at?: string;
 };
 
+function incidentKindBadge(kind: string) {
+  switch (kind.toLowerCase()) {
+    case "breakdown":
+    case "mechanical":
+      return <Badge variant="destructive" className="capitalize">{kind}</Badge>;
+    case "accident":
+    case "collision":
+      return <Badge variant="destructive" className="capitalize font-bold">{kind}</Badge>;
+    case "medical":
+      return <Badge variant="destructive" className="capitalize">{kind}</Badge>;
+    case "delay":
+    case "traffic":
+      return <Badge variant="secondary" className="bg-amber-500/15 text-amber-700 dark:text-amber-400 border-amber-500/30 capitalize">{kind}</Badge>;
+    default:
+      return <Badge variant="outline" className="capitalize">{kind}</Badge>;
+  }
+}
+
 export default function IncidentsPage() {
   const [incidents, setIncidents] = useState<Incident[]>([]);
   const [openOnly, setOpenOnly] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
 
   const load = useCallback(async () => {
+    setLoading(true);
     try {
       const res = await apiFetch<{ items: Incident[] }>(`/admin/incidents?open=${openOnly}`);
       setIncidents(res.items ?? []);
     } catch (e) {
       setError(e instanceof ApiError ? e.message : "failed to load incidents");
+    } finally {
+      setLoading(false);
     }
   }, [openOnly]);
 
@@ -31,46 +67,139 @@ export default function IncidentsPage() {
   }, [load]);
 
   async function resolve(id: string) {
-    await apiFetch(`/admin/incidents/${id}/resolve`, { method: "POST" });
-    await load();
+    setError(null);
+    setSuccess(null);
+    try {
+      await apiFetch(`/admin/incidents/${id}/resolve`, { method: "POST" });
+      setSuccess("Incident marked as resolved.");
+      await load();
+    } catch (e) {
+      setError(e instanceof ApiError ? e.message : "failed to resolve incident");
+    }
   }
 
+  const openCount = incidents.filter((i) => !i.resolved_at).length;
+
   return (
-    <div className="max-w-3xl space-y-6">
-      <div className="flex items-center justify-between">
+    <div className="space-y-6">
+      {/* Header & Filter */}
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-semibold">Incidents</h1>
-          <p className="mt-1 text-sm text-slate-600">One-tap reports from the driver app.</p>
+          <h1 className="text-2xl font-bold tracking-tight text-foreground">Incident Log</h1>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Driver-reported safety anomalies, mechanical faults, and delay notices from the road.
+          </p>
         </div>
-        <label className="flex items-center gap-2 text-sm">
-          <input type="checkbox" checked={openOnly} onChange={(e) => setOpenOnly(e.target.checked)} />
-          Open only
-        </label>
+
+        <div className="flex items-center gap-3 self-start sm:self-auto">
+          <label className="flex items-center gap-2 text-xs font-medium cursor-pointer bg-card px-3 py-1.5 rounded-xl border border-border/80 shadow-xs">
+            <input
+              type="checkbox"
+              checked={openOnly}
+              onChange={(e) => setOpenOnly(e.target.checked)}
+              className="size-4 rounded border-border text-primary focus:ring-primary"
+            />
+            <span>Show Open Incidents Only</span>
+          </label>
+        </div>
       </div>
 
-      {error && <p className="rounded bg-red-50 p-3 text-sm text-red-700">{error}</p>}
+      {error && (
+        <Alert variant="destructive">
+          <AlertTriangle className="size-4" />
+          <AlertTitle>Error</AlertTitle>
+          <AlertDescription>{error}</AlertDescription>
+        </Alert>
+      )}
 
-      <table className="w-full overflow-hidden rounded-lg border border-slate-200 bg-white text-sm">
-        <thead className="bg-slate-100 text-left">
-          <tr><th className="p-2">When</th><th className="p-2">Kind</th><th className="p-2">Note</th><th className="p-2">Status</th><th className="p-2"></th></tr>
-        </thead>
-        <tbody>
-          {incidents.length === 0 && <tr><td className="p-3 text-slate-500" colSpan={5}>No incidents.</td></tr>}
-          {incidents.map((inc) => (
-            <tr key={inc.id} className="border-t border-slate-100">
-              <td className="p-2 text-xs">{new Date(inc.ts).toLocaleString()}</td>
-              <td className="p-2 capitalize">{inc.kind}</td>
-              <td className="p-2">{inc.note ?? "—"}</td>
-              <td className="p-2">{inc.resolved_at ? "Resolved" : "Open"}</td>
-              <td className="p-2 text-right">
-                {!inc.resolved_at && (
-                  <button onClick={() => resolve(inc.id)} className="text-brand hover:underline">Resolve</button>
-                )}
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
+      {success && (
+        <Alert className="border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-400">
+          <Check className="size-4" />
+          <AlertDescription>{success}</AlertDescription>
+        </Alert>
+      )}
+
+      {/* Incidents Table */}
+      <div className="rounded-2xl border border-border/80 bg-card overflow-hidden shadow-xs">
+        <Table>
+          <TableHeader className="bg-muted/40">
+            <TableRow>
+              <TableHead className="font-semibold">Timestamp</TableHead>
+              <TableHead className="font-semibold">Incident Type</TableHead>
+              <TableHead className="font-semibold">Driver Note / Description</TableHead>
+              <TableHead className="font-semibold">Status</TableHead>
+              <TableHead className="text-right font-semibold">Action</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {loading ? (
+              <TableRow>
+                <TableCell colSpan={5} className="h-28 text-center text-muted-foreground">
+                  Loading incidents...
+                </TableCell>
+              </TableRow>
+            ) : incidents.length === 0 ? (
+              <TableRow>
+                <TableCell colSpan={5} className="h-28 text-center text-muted-foreground">
+                  <div className="flex flex-col items-center justify-center gap-1">
+                    <CheckCircle2 className="size-5 text-emerald-600" />
+                    <span>No active incidents reported.</span>
+                  </div>
+                </TableCell>
+              </TableRow>
+            ) : (
+              incidents.map((inc) => (
+                <TableRow
+                  key={inc.id}
+                  className={!inc.resolved_at ? "bg-amber-500/5 hover:bg-amber-500/10" : ""}
+                >
+                  <TableCell className="text-xs text-muted-foreground font-mono">
+                    <div className="flex items-center gap-1.5">
+                      <Clock className="size-3.5 text-muted-foreground/60" />
+                      <span>{new Date(inc.ts).toLocaleString()}</span>
+                    </div>
+                  </TableCell>
+
+                  <TableCell>{incidentKindBadge(inc.kind)}</TableCell>
+
+                  <TableCell className="max-w-md">
+                    <span className="text-xs font-medium text-foreground">
+                      {inc.note || <span className="text-muted-foreground italic">No note provided</span>}
+                    </span>
+                  </TableCell>
+
+                  <TableCell>
+                    {inc.resolved_at ? (
+                      <Badge variant="outline" className="text-emerald-600 border-emerald-500/30 bg-emerald-50/50 dark:bg-emerald-950/20 text-[10px]">
+                        Resolved
+                      </Badge>
+                    ) : (
+                      <Badge variant="secondary" className="bg-amber-500/15 text-amber-700 dark:text-amber-400 border-amber-500/30 text-[10px]">
+                        Open / Needs Triage
+                      </Badge>
+                    )}
+                  </TableCell>
+
+                  <TableCell className="text-right">
+                    {!inc.resolved_at ? (
+                      <Button
+                        size="xs"
+                        variant="outline"
+                        onClick={() => resolve(inc.id)}
+                        className="text-xs text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50"
+                      >
+                        <Check className="size-3 mr-1" /> Mark Resolved
+                      </Button>
+                    ) : (
+                      <span className="text-xs text-muted-foreground">—</span>
+                    )}
+                  </TableCell>
+                </TableRow>
+              ))
+            )}
+          </TableBody>
+        </Table>
+      </div>
     </div>
   );
 }

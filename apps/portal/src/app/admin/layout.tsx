@@ -1,20 +1,11 @@
-import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { ADMIN_ROLES, hasAnyRole, rolesFromAppMetadata } from "@/lib/rbac";
+import { AdminSidebar } from "@/components/admin-sidebar";
+import { AdminHeader } from "@/components/admin-header";
 import SignOutButton from "./sign-out-button";
-
-const NAV = [
-  { href: "/admin", label: "Overview" },
-  { href: "/admin/vehicles", label: "Vehicles" },
-  { href: "/admin/drivers", label: "Drivers" },
-  { href: "/admin/routes", label: "Routes & timetables" },
-  { href: "/admin/roster", label: "Duty roster" },
-  { href: "/admin/dispatch", label: "Live dispatch" },
-  { href: "/admin/incidents", label: "Incidents" },
-  { href: "/admin/alerts", label: "Service alerts" },
-  { href: "/admin/api-keys", label: "API keys" },
-];
+import { ShieldAlert } from "lucide-react";
+import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from "@/components/ui/card";
 
 export default async function AdminLayout({ children }: { children: React.ReactNode }) {
   const supabase = await createClient();
@@ -29,45 +20,55 @@ export default async function AdminLayout({ children }: { children: React.ReactN
   const roles = rolesFromAppMetadata(user.app_metadata);
   if (!hasAnyRole(roles, ADMIN_ROLES)) {
     return (
-      <main className="flex min-h-screen items-center justify-center p-8">
-        <div className="max-w-md rounded-lg border border-red-200 bg-red-50 p-6 text-center">
-          <h1 className="text-lg font-semibold text-red-800">Access restricted</h1>
-          <p className="mt-2 text-sm text-red-700">
-            Your account ({user.email}) doesn&apos;t hold a fleet_manager, dispatcher or agency_admin
-            role. Ask an agency admin to grant one, then sign in again.
-          </p>
-          <div className="mt-4">
-            <SignOutButton />
-          </div>
-        </div>
+      <main className="flex min-h-screen items-center justify-center p-4 bg-muted/30">
+        <Card className="max-w-md w-full border-destructive/30 shadow-lg">
+          <CardHeader className="text-center pb-2">
+            <div className="mx-auto flex size-12 items-center justify-center rounded-full bg-destructive/10 text-destructive mb-2">
+              <ShieldAlert className="size-6" />
+            </div>
+            <CardTitle className="text-xl text-destructive">Access Restricted</CardTitle>
+            <CardDescription className="text-sm">
+              Your account doesn&apos;t hold an operator role.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="text-center text-sm text-muted-foreground">
+            <p>
+              Signed in as <span className="font-semibold text-foreground">{user.email}</span>.
+            </p>
+            <p className="mt-2 text-xs">
+              Required roles: <code className="rounded bg-muted px-1.5 py-0.5 font-mono text-foreground">fleet_manager</code>,{" "}
+              <code className="rounded bg-muted px-1.5 py-0.5 font-mono text-foreground">dispatcher</code>, or{" "}
+              <code className="rounded bg-muted px-1.5 py-0.5 font-mono text-foreground">agency_admin</code>.
+            </p>
+            <p className="mt-2 text-xs">
+              Please contact your agency administrator to grant operator permissions, then sign in again.
+            </p>
+          </CardContent>
+          <CardFooter className="flex justify-center pt-2">
+            <SignOutButton variant="destructive" />
+          </CardFooter>
+        </Card>
       </main>
     );
   }
 
+  const userInfo = {
+    email: user.email,
+    roles,
+  };
+
   return (
-    <div className="flex min-h-screen">
-      <aside className="w-56 shrink-0 border-r border-slate-200 bg-white p-4">
-        <div className="mb-6 text-lg font-semibold text-brand">Transit Admin</div>
-        <nav className="space-y-1">
-          {NAV.map((item) => (
-            <Link
-              key={item.href}
-              href={item.href}
-              className="block rounded px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-100"
-            >
-              {item.label}
-            </Link>
-          ))}
-        </nav>
-        <div className="mt-8 border-t border-slate-200 pt-4 text-xs text-slate-500">
-          <div className="truncate">{user.email}</div>
-          <div className="mt-1">{roles.join(", ")}</div>
-          <div className="mt-3">
-            <SignOutButton />
-          </div>
-        </div>
-      </aside>
-      <main className="flex-1 p-8">{children}</main>
+    <div className="min-h-screen bg-background flex flex-col md:flex-row">
+      {/* Desktop fixed sidebar */}
+      <AdminSidebar user={userInfo} />
+
+      {/* Main content area */}
+      <div className="flex-1 flex flex-col md:pl-64 min-w-0">
+        <AdminHeader user={userInfo} />
+        <main className="flex-1 px-4 sm:px-6 lg:px-8 py-6 max-w-7xl w-full mx-auto">
+          {children}
+        </main>
+      </div>
     </div>
   );
 }

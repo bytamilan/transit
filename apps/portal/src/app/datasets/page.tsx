@@ -1,12 +1,26 @@
 import type { Metadata } from "next";
+import Link from "next/link";
+import {
+  Database,
+  Download,
+  Radio,
+  Globe,
+  Shield,
+  FileText,
+  ArrowLeft,
+  ExternalLink,
+  Bus,
+} from "lucide-react";
+import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 
 export const metadata: Metadata = {
-  title: "Datasets — Transit",
-  description: "Open GTFS and GTFS-RT feeds published by agencies on this deployment.",
+  title: "Open Transit Datasets — Transit Portal",
+  description: "Standards-compliant GTFS static schedules and GTFS-RT feeds published on this deployment.",
 };
 
-// Public, unauthenticated page — /v0/agencies is an unauthenticated API
-// route, same trust boundary as the rest of /v0 (Phase 10).
 export const dynamic = "force-dynamic";
 
 type DatasetAgency = {
@@ -40,90 +54,130 @@ export default async function DatasetsPage() {
   const exporterBase = process.env.NEXT_PUBLIC_EXPORTER_BASE_URL;
 
   return (
-    <main className="mx-auto max-w-3xl px-6 py-12">
-      <h1 className="text-2xl font-semibold text-slate-900">Open datasets</h1>
-      <p className="mt-2 text-sm text-slate-600">
-        Standards-compliant GTFS and GTFS-RT feeds published by each agency on this deployment.
-        Static schedules are rebuilt on a schedule; realtime feeds update continuously.
-      </p>
+    <main className="min-h-screen bg-background py-12 px-4 sm:px-6 lg:px-8">
+      <div className="mx-auto max-w-4xl space-y-8">
+        {/* Navigation & Header */}
+        <div className="space-y-3">
+          <Link
+            href="/admin"
+            className="inline-flex items-center gap-1 text-xs font-semibold text-muted-foreground hover:text-foreground transition-colors"
+          >
+            <ArrowLeft className="size-3.5" />
+            <span>Go to Admin Console</span>
+          </Link>
 
-      {error && (
-        <p className="mt-6 rounded border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
-          {error}
-        </p>
-      )}
-
-      {!error && agencies.length === 0 && (
-        <p className="mt-6 text-sm text-slate-500">No agencies are published yet.</p>
-      )}
-
-      <ul className="mt-8 space-y-6">
-        {agencies.map((a) => (
-          <li key={a.slug} className="rounded-lg border border-slate-200 bg-white p-5">
-            <div className="flex items-baseline justify-between gap-4">
-              <h2 className="text-lg font-medium text-slate-900">{a.name}</h2>
-              <span className="text-xs text-slate-400">{a.timezone}</span>
+          <div className="flex items-center gap-3">
+            <div className="flex size-10 items-center justify-center rounded-xl bg-primary text-primary-foreground">
+              <Database className="size-5" />
             </div>
-
-            {a.modes.length > 0 && (
-              <div className="mt-2 flex flex-wrap gap-1.5">
-                {a.modes.map((m) => (
-                  <span
-                    key={m}
-                    className="rounded-full bg-slate-100 px-2 py-0.5 text-xs text-slate-600"
-                  >
-                    {m}
-                  </span>
-                ))}
-              </div>
-            )}
-
-            <dl className="mt-3 text-sm text-slate-600">
-              <div className="flex gap-1">
-                <dt className="font-medium text-slate-700">Licence:</dt>
-                <dd>{a.license_spdx || "not specified"}</dd>
-              </div>
-              <div className="mt-1 flex gap-1">
-                <dt className="font-medium text-slate-700">Attribution:</dt>
-                <dd>{a.attribution || "not specified"}</dd>
-              </div>
-              {a.terms_url && (
-                <div className="mt-1">
-                  <a
-                    href={a.terms_url}
-                    className="text-brand underline"
-                    target="_blank"
-                    rel="noreferrer"
-                  >
-                    Terms of use
-                  </a>
-                </div>
-              )}
-            </dl>
-
-            {exporterBase ? (
-              <div className="mt-4 flex flex-wrap gap-3 text-sm">
-                <a
-                  className="rounded border border-slate-300 px-3 py-1.5 font-medium text-slate-700 hover:bg-slate-50"
-                  href={`${exporterBase}/${a.slug}/gtfs.zip`}
-                >
-                  Download GTFS.zip
-                </a>
-                <a
-                  className="rounded border border-slate-300 px-3 py-1.5 font-medium text-slate-700 hover:bg-slate-50"
-                  href={`${exporterBase}/${a.slug}/gtfs-rt/service-alerts`}
-                >
-                  GTFS-RT service alerts
-                </a>
-              </div>
-            ) : (
-              <p className="mt-4 text-xs text-slate-400">
-                Feed downloads are unavailable — the exporter service isn&apos;t configured.
+            <div>
+              <h1 className="text-3xl font-bold tracking-tight text-foreground">
+                Open Transit Datasets
+              </h1>
+              <p className="mt-1 text-sm text-muted-foreground">
+                Standards-compliant GTFS static schedules and GTFS-RT feeds published by agencies on this deployment.
               </p>
-            )}
-          </li>
-        ))}
-      </ul>
+            </div>
+          </div>
+        </div>
+
+        {error && (
+          <Alert className="border-amber-500/30 bg-amber-50/50 text-amber-800 dark:text-amber-300">
+            <AlertDescription className="text-xs">{error}</AlertDescription>
+          </Alert>
+        )}
+
+        {!error && agencies.length === 0 && (
+          <Card className="p-8 text-center text-muted-foreground">
+            <Database className="size-8 mx-auto mb-2 text-muted-foreground/50" />
+            <p className="text-sm font-medium">No transit agencies published yet.</p>
+          </Card>
+        )}
+
+        {/* Agencies Grid */}
+        <div className="grid grid-cols-1 gap-6">
+          {agencies.map((a) => (
+            <Card key={a.slug} className="border-border/80 shadow-xs">
+              <CardHeader className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-2 border-b border-border/60 pb-4">
+                <div>
+                  <CardTitle className="text-xl font-bold text-foreground">
+                    {a.name}
+                  </CardTitle>
+                  <CardDescription className="text-xs font-mono mt-0.5">
+                    Agency Slug: {a.slug} • Timezone: {a.timezone}
+                  </CardDescription>
+                </div>
+
+                {a.modes.length > 0 && (
+                  <div className="flex flex-wrap gap-1.5 self-start">
+                    {a.modes.map((m) => (
+                      <Badge key={m} variant="secondary" className="capitalize text-[11px]">
+                        {m}
+                      </Badge>
+                    ))}
+                  </div>
+                )}
+              </CardHeader>
+
+              <CardContent className="pt-4 space-y-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+                  <div className="space-y-1">
+                    <span className="font-semibold text-muted-foreground uppercase text-[10px] tracking-wider block">
+                      License
+                    </span>
+                    <span className="font-mono text-foreground">{a.license_spdx || "Not specified"}</span>
+                  </div>
+
+                  <div className="space-y-1">
+                    <span className="font-semibold text-muted-foreground uppercase text-[10px] tracking-wider block">
+                      Attribution
+                    </span>
+                    <span className="text-foreground">{a.attribution || "Not specified"}</span>
+                  </div>
+                </div>
+
+                {a.terms_url && (
+                  <div className="pt-1">
+                    <a
+                      href={a.terms_url}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="inline-flex items-center gap-1 text-xs font-semibold text-primary hover:underline"
+                    >
+                      <span>Agency Terms of Use</span>
+                      <ExternalLink className="size-3" />
+                    </a>
+                  </div>
+                )}
+
+                {exporterBase ? (
+                  <div className="pt-3 border-t border-border/60 flex flex-wrap gap-3">
+                    <a
+                      href={`${exporterBase}/${a.slug}/gtfs.zip`}
+                      className="inline-flex items-center gap-1.5 rounded-xl border border-border/80 bg-card px-3.5 py-2 text-xs font-semibold text-foreground hover:bg-muted transition-colors shadow-2xs"
+                    >
+                      <Download className="size-3.5 text-primary" />
+                      <span>Download GTFS.zip</span>
+                    </a>
+
+                    <a
+                      href={`${exporterBase}/${a.slug}/gtfs-rt/service-alerts`}
+                      className="inline-flex items-center gap-1.5 rounded-xl border border-border/80 bg-card px-3.5 py-2 text-xs font-semibold text-foreground hover:bg-muted transition-colors shadow-2xs"
+                    >
+                      <Radio className="size-3.5 text-rose-500" />
+                      <span>GTFS-RT Service Alerts Feed</span>
+                    </a>
+                  </div>
+                ) : (
+                  <p className="text-xs text-muted-foreground pt-2 italic">
+                    Feed downloads unavailable — exporter service not configured.
+                  </p>
+                )}
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      </div>
     </main>
   );
 }
