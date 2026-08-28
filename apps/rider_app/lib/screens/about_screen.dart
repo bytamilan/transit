@@ -12,7 +12,9 @@ class AboutScreen extends ConsumerWidget {
     final agency = ref.watch(agencyProvider);
     final locale = ref.watch(localeProvider);
     final license = agency.config?.license;
-    final title = agency.agency != null ? localizedName(agency.agency!.name.toMap(), locale) : 'Transit';
+    final title = agency.agency != null
+        ? localizedName(agency.agency!.name.values, locale)
+        : 'Transit';
 
     return Scaffold(
       appBar: AppBar(title: const Text('About')),

@@ -23,8 +23,13 @@ class HomeScreen extends ConsumerStatefulWidget {
 }
 
 class _HomeScreenState extends ConsumerState<HomeScreen> {
+  static const _defaultCamera = (lat: 1.2966, lon: 103.7764);
+  static const _mapProviderResolver = MapProviderResolver(
+    mapLibre: MapLibreProvider(),
+    protomaps: MapLibreProvider(),
+  );
+
   late final _api = ref.read(apiClientProvider);
-  late final _map = widget.mapProvider ?? const MapLibreProvider();
   var _stops = const AsyncValue<List<Stop>>.loading();
 
   @override
@@ -47,7 +52,13 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   Widget build(BuildContext context) {
     final agency = ref.watch(agencyProvider);
     final locale = ref.watch(localeProvider);
-    final title = agency.agency != null ? localizedName(agency.agency!.name.toMap(), locale) : 'Transit';
+    final title = agency.agency != null
+        ? localizedName(agency.agency!.name.values, locale)
+        : 'Transit';
+    final map = widget.mapProvider ??
+        _mapProviderResolver.resolve(
+          agency.config?.mapProvider ?? core.MapProviderKind.maplibre,
+        );
 
     return Scaffold(
       appBar: AppBar(
@@ -58,12 +69,14 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
             tooltip: 'Plan a trip',
             onPressed: () => Navigator.push(
               context,
-              MaterialPageRoute(builder: (_) => PlannerScreen(slug: agency.agencySlug ?? '')),
+              MaterialPageRoute(
+                  builder: (_) => PlannerScreen(slug: agency.agencySlug ?? '')),
             ),
           ),
           IconButton(
             icon: const Icon(Icons.info_outline),
-            onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const AboutScreen())),
+            onPressed: () => Navigator.push(context,
+                MaterialPageRoute(builder: (_) => const AboutScreen())),
           ),
         ],
       ),
@@ -72,12 +85,12 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
           if (agency.agencySlug != null) AlertBanner(slug: agency.agencySlug!),
           Expanded(
             flex: 1,
-            child: _map.buildMap(
+            child: map.buildMap(
               MapViewOptions(
-                provider: core.MapProviderKind.maplibre,
-                initialLat: agency.config?.branding != null ? 1.2966 : 34.0522,
-                initialLon:
-                    agency.config?.branding != null ? 103.7764 : -118.2437,
+                provider:
+                    agency.config?.mapProvider ?? core.MapProviderKind.maplibre,
+                initialLat: _defaultCamera.lat,
+                initialLon: _defaultCamera.lon,
                 zoom: 13,
                 markers: _stops.valueOrNull
                         ?.map((s) => MapMarker(
@@ -101,7 +114,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                   return ListTile(
                     title: Text(stop.stopName),
                     subtitle: Text(stop.stopId),
-                    onTap: () => context.go('/stop/${agency.agencySlug}/${stop.stopId}'),
+                    onTap: () =>
+                        context.go('/stop/${agency.agencySlug}/${stop.stopId}'),
                   );
                 },
               ),

@@ -17,17 +17,14 @@ class RiderApp extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final agency = ref.watch(agencyProvider);
     final locale = ref.watch(localeProvider);
-    final branding = agency.config?.branding;
-    final theme = branding != null
-        ? AgencyTheme.fromJson({
-            'primary': branding.primary,
-            'secondary': branding.secondary,
-            'logo_url': branding.logoUrl,
-            'font': branding.font,
-          })
+    final config = agency.config;
+    final theme = config != null
+        ? AgencyTheme.fromConfig(config)
         : const AgencyTheme(primary: '#1976D2', secondary: '#FFC107');
 
-    final title = agency.agency != null ? localizedName(agency.agency!.name.toMap(), locale) : 'Transit';
+    final title = agency.agency != null
+        ? localizedName(agency.agency!.name.values, locale)
+        : 'Transit';
 
     return ThemeProvider(
       agencyTheme: theme,

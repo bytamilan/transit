@@ -18,10 +18,16 @@ class AgencySelectScreen extends ConsumerWidget {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             if (state.loading) const LinearProgressIndicator(),
-            if (state.error != null) Text('Error: ${state.error}', style: TextStyle(color: Theme.of(context).colorScheme.error)),
+            if (state.error != null)
+              Text(
+                'Error: ${state.error!.message}',
+                style: TextStyle(color: Theme.of(context).colorScheme.error),
+              ),
             ElevatedButton(
               onPressed: () async {
-                await ref.read(agencyProvider.notifier).loadAgency('demo-metro');
+                await ref
+                    .read(agencyProvider.notifier)
+                    .loadAgency('demo-metro');
                 if (context.mounted) context.go('/home');
               },
               child: const Text('Demo Metro'),
@@ -29,7 +35,9 @@ class AgencySelectScreen extends ConsumerWidget {
             const SizedBox(height: 8),
             ElevatedButton(
               onPressed: () async {
-                await ref.read(agencyProvider.notifier).loadAgency('demo-transit');
+                await ref
+                    .read(agencyProvider.notifier)
+                    .loadAgency('demo-transit');
                 if (context.mounted) context.go('/home');
               },
               child: const Text('Demo Transit'),

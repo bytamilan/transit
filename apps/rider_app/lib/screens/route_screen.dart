@@ -11,15 +11,21 @@ class RouteScreen extends ConsumerStatefulWidget {
   final String routeId;
   final MapProvider? mapProvider;
 
-  const RouteScreen({super.key, required this.slug, required this.routeId, this.mapProvider});
+  const RouteScreen(
+      {super.key, required this.slug, required this.routeId, this.mapProvider});
 
   @override
   ConsumerState<RouteScreen> createState() => _RouteScreenState();
 }
 
 class _RouteScreenState extends ConsumerState<RouteScreen> {
+  static const _defaultCamera = (lat: 1.2966, lon: 103.7764);
+  static const _mapProviderResolver = MapProviderResolver(
+    mapLibre: MapLibreProvider(),
+    protomaps: MapLibreProvider(),
+  );
+
   late final _api = ref.read(apiClientProvider);
-  late final _map = widget.mapProvider ?? const MapLibreProvider();
   var _trips = const AsyncValue<List<Trip>>.loading();
   var _selectedTripId = '';
   var _stopTimes = const AsyncValue<List<StopTime>>.loading();
@@ -32,7 +38,8 @@ class _RouteScreenState extends ConsumerState<RouteScreen> {
 
   Future<void> _loadRoute() async {
     _trips = await AsyncValue.guard(() async {
-      final response = await _api.listTrips(slug: widget.slug, routeId: widget.routeId);
+      final response =
+          await _api.listTrips(slug: widget.slug, routeId: widget.routeId);
       return response.data?.items.toList() ?? [];
     });
     if (mounted) {
@@ -46,7 +53,8 @@ class _RouteScreenState extends ConsumerState<RouteScreen> {
   Future<void> _selectTrip(String tripId) async {
     _selectedTripId = tripId;
     _stopTimes = await AsyncValue.guard(() async {
-      final response = await _api.listTripStopTimes(slug: widget.slug, tripId: tripId);
+      final response =
+          await _api.listTripStopTimes(slug: widget.slug, tripId: tripId);
       return response.data?.items.toList() ?? [];
     });
     if (mounted) setState(() {});
@@ -55,6 +63,10 @@ class _RouteScreenState extends ConsumerState<RouteScreen> {
   @override
   Widget build(BuildContext context) {
     final agency = ref.watch(agencyProvider);
+    final map = widget.mapProvider ??
+        _mapProviderResolver.resolve(
+          agency.config?.mapProvider ?? core.MapProviderKind.maplibre,
+        );
 
     return Scaffold(
       appBar: AppBar(title: Text('Route ${widget.routeId}')),
@@ -62,12 +74,12 @@ class _RouteScreenState extends ConsumerState<RouteScreen> {
         children: [
           SizedBox(
             height: 200,
-            child: _map.buildMap(
+            child: map.buildMap(
               MapViewOptions(
-                provider: core.MapProviderKind.maplibre,
-                initialLat: agency.config?.branding != null ? 1.2966 : 34.0522,
-                initialLon:
-                    agency.config?.branding != null ? 103.7764 : -118.2437,
+                provider:
+                    agency.config?.mapProvider ?? core.MapProviderKind.maplibre,
+                initialLat: _defaultCamera.lat,
+                initialLon: _defaultCamera.lon,
                 zoom: 13,
                 markers: _stopTimes.valueOrNull
                         ?.map((st) => MapMarker(
@@ -110,13 +122,15 @@ class _RouteScreenState extends ConsumerState<RouteScreen> {
                         itemBuilder: (context, index) {
                           final st = items[index];
                           return ListTile(
-                            leading: CircleAvatar(child: Text('${st.stopSequence}')),
+                            leading:
+                                CircleAvatar(child: Text('${st.stopSequence}')),
                             title: Text('${st.stopId}'),
                             subtitle: Text('${st.arrivalTime}'),
                           );
                         },
                       ),
-                      loading: () => const Center(child: CircularProgressIndicator()),
+                      loading: () =>
+                          const Center(child: CircularProgressIndicator()),
                       error: (e, _) => Center(child: Text('Error: $e')),
                     ),
                   ),

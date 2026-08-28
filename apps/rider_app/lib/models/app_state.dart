@@ -1,12 +1,12 @@
-import 'package:transit_api_client/transit_api_client.dart';
+import 'package:transit_core/transit_core.dart' as core;
 
 /// Lightweight immutable state for the selected agency.
 class AppState {
   final String? agencySlug;
-  final Agency? agency;
-  final AgencyConfig? config;
+  final core.Agency? agency;
+  final core.AgencyConfig? config;
   final bool loading;
-  final String? error;
+  final core.Failure? error;
 
   const AppState({
     this.agencySlug,
@@ -18,17 +18,18 @@ class AppState {
 
   AppState copyWith({
     String? agencySlug,
-    Agency? agency,
-    AgencyConfig? config,
+    core.Agency? agency,
+    core.AgencyConfig? config,
     bool? loading,
-    String? error,
+    core.Failure? error,
+    bool clearError = false,
   }) {
     return AppState(
       agencySlug: agencySlug ?? this.agencySlug,
       agency: agency ?? this.agency,
       config: config ?? this.config,
       loading: loading ?? this.loading,
-      error: error ?? this.error,
+      error: clearError ? null : error ?? this.error,
     );
   }
 }

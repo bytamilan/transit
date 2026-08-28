@@ -4,12 +4,14 @@
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:transit_api_client/transit_api_client.dart';
+import 'package:transit_core/transit_core.dart' as core;
 import 'package:transit_maps/transit_maps.dart';
 
 import 'package:rider_app/models/app_state.dart';
 import 'package:rider_app/providers/agency_provider.dart';
 
-Agency fixtureAgency({String slug = 'demo-metro', String name = 'Demo Metro'}) {
+Agency fixtureApiAgency(
+    {String slug = 'demo-metro', String name = 'Demo Metro'}) {
   return Agency((b) => b
     ..id = 'agency-1'
     ..slug = slug
@@ -17,7 +19,7 @@ Agency fixtureAgency({String slug = 'demo-metro', String name = 'Demo Metro'}) {
     ..timezone = 'America/Los_Angeles');
 }
 
-AgencyConfig fixtureAgencyConfig() {
+AgencyConfig fixtureApiAgencyConfig() {
   return AgencyConfig((b) => b
     ..locales.addAll(['en'])
     ..currency = 'USD'
@@ -46,7 +48,40 @@ AppState fixtureAppState({bool withConfig = true}) {
   );
 }
 
-Stop fixtureStop(String id, String name, {double lat = 1.29, double lon = 103.77}) {
+core.Agency fixtureAgency(
+    {String slug = 'demo-metro', String name = 'Demo Metro'}) {
+  return core.Agency(
+    id: 'agency-1',
+    slug: slug,
+    name: core.LocalizedText({'en': name}),
+    timezone: 'America/Los_Angeles',
+  );
+}
+
+core.AgencyConfig fixtureAgencyConfig() {
+  return core.AgencyConfig(
+    locales: const ['en'],
+    currency: 'USD',
+    distanceUnit: core.DistanceUnit.metric,
+    modes: const ['bus'],
+    mapProvider: core.MapProviderKind.maplibre,
+    license: core.AgencyLicense(
+      spdx: 'CC-BY-4.0',
+      attribution: 'Demo Metro Transit Authority',
+    ),
+    branding: core.AgencyBranding(primary: '#1976D2'),
+    driverOps: const core.DriverOpsConfig(
+      stopGeofenceM: 30,
+      pingIntervalMovingS: 10,
+      pingIntervalIdleS: 60,
+      autoStartTrip: true,
+      lockUiAboveKmh: 5,
+    ),
+  );
+}
+
+Stop fixtureStop(String id, String name,
+    {double lat = 1.29, double lon = 103.77}) {
   return Stop((b) => b
     ..stopId = id
     ..stopName = name
@@ -95,7 +130,8 @@ class FakeDefaultApi extends DefaultApi {
   final List<Trip> trips;
   final List<StopTime> stopTimes;
 
-  Response<T> _ok<T>(T data) => Response<T>(data: data, requestOptions: RequestOptions(path: ''));
+  Response<T> _ok<T>(T data) =>
+      Response<T>(data: data, requestOptions: RequestOptions(path: ''));
 
   @override
   Future<Response<Agency>> getAgency({
@@ -107,7 +143,7 @@ class FakeDefaultApi extends DefaultApi {
     ProgressCallback? onSendProgress,
     ProgressCallback? onReceiveProgress,
   }) async =>
-      _ok(fixtureAgency(slug: slug));
+      _ok(fixtureApiAgency(slug: slug));
 
   @override
   Future<Response<AgencyConfig>> getAgencyConfig({
@@ -119,7 +155,7 @@ class FakeDefaultApi extends DefaultApi {
     ProgressCallback? onSendProgress,
     ProgressCallback? onReceiveProgress,
   }) async =>
-      _ok(fixtureAgencyConfig());
+      _ok(fixtureApiAgencyConfig());
 
   @override
   Future<Response<StopList>> listStops({
