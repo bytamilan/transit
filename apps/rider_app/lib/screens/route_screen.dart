@@ -8,8 +8,9 @@ import '../providers/api_provider.dart';
 class RouteScreen extends ConsumerStatefulWidget {
   final String slug;
   final String routeId;
+  final MapProvider? mapProvider;
 
-  const RouteScreen({super.key, required this.slug, required this.routeId});
+  const RouteScreen({super.key, required this.slug, required this.routeId, this.mapProvider});
 
   @override
   ConsumerState<RouteScreen> createState() => _RouteScreenState();
@@ -17,7 +18,7 @@ class RouteScreen extends ConsumerStatefulWidget {
 
 class _RouteScreenState extends ConsumerState<RouteScreen> {
   late final _api = ref.read(apiClientProvider);
-  final _map = MapLibreProvider();
+  late final _map = widget.mapProvider ?? MapLibreProvider();
   var _trips = const AsyncValue<List<Trip>>.loading();
   var _selectedTripId = '';
   var _stopTimes = const AsyncValue<List<StopTime>>.loading();
