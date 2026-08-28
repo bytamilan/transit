@@ -60,6 +60,12 @@ make test       # Dart, Go and portal suites
 make lint
 ```
 
+Local users:
+- Admin console: demo-admin@transit.local
+- Password: DemoAdmin123!
+- Role: agency_admin
+
+
 ## Contributing
 
 Work follows the phase plan in [`docs/PHASE_PLAN.md`](docs/PHASE_PLAN.md).
