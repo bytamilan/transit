@@ -36,3 +36,4 @@ docs/adr/*.md
 
 # ---- Agent scratch state ----
 .superpowers/
+docs/superpowers
