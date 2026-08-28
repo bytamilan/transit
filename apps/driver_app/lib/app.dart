@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:transit_design/transit_design.dart';
 
+import 'providers/duty_provider.dart';
 import 'providers/night_palette_provider.dart';
 import 'screens/active_shift_screen.dart';
 import 'screens/duty_screen.dart';
@@ -28,11 +30,15 @@ class DriverApp extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final isNight = ref.watch(isNightPaletteProvider);
+    final agency = ref.watch(agencyInfoProvider).valueOrNull;
+    final theme = agency == null
+        ? const AgencyTheme(primary: '#000000', secondary: '#FFFFFF')
+        : AgencyTheme.fromConfig(agency.config);
     return MaterialApp.router(
       title: 'Transit Driver',
       debugShowCheckedModeBanner: false,
-      theme: ThemeData(useMaterial3: true, colorSchemeSeed: Colors.indigo, brightness: Brightness.light),
-      darkTheme: ThemeData(useMaterial3: true, colorSchemeSeed: Colors.indigo, brightness: Brightness.dark),
+      theme: theme.toTheme(brightness: Brightness.light),
+      darkTheme: theme.toTheme(brightness: Brightness.dark),
       themeMode: isNight ? ThemeMode.dark : ThemeMode.light,
       routerConfig: _router,
     );

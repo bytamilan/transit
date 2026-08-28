@@ -18,6 +18,8 @@ dependencies:
     path: ../../packages/transit_telemetry
   transit_design:
     path: ../../packages/transit_design
+  transit_core:
+    path: ../../packages/transit_core
   geolocator: ^13.0.0
   wakelock_plus: ^1.2.8
   flutter_background_service: ^5.0.10

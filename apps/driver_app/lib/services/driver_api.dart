@@ -41,7 +41,7 @@ class DriverApi {
 
   Future<AgencyInfo> getAgency() async {
     final res = await _dio.get<Map<String, dynamic>>('/driver/agency');
-    return AgencyInfo.fromJson(res.data!);
+    return AgencyInfo.fromJson(Map<String, dynamic>.from(res.data!));
   }
 
   Future<List<DutyAssignment>> listDuty({String? serviceDate}) async {

@@ -1,35 +1,31 @@
-/// The caller's own agency, from `/driver/agency` — same shape as the public
-/// `/v0/agencies/{slug}` + `/config` endpoints, combined.
+import 'package:transit_core/transit_core.dart' as core;
+
+/// The caller's own agency, from `/driver/agency` — the public agency and
+/// config payloads combined into the shared domain types.
 class AgencyInfo {
   const AgencyInfo({
-    required this.id,
-    required this.slug,
-    required this.name,
-    required this.timezone,
+    required this.agency,
     required this.config,
   });
 
-  final String id;
-  final String slug;
-  final Map<String, dynamic> name;
-  final String timezone;
-  final Map<String, dynamic> config;
+  final core.Agency agency;
+  final core.AgencyConfig config;
 
-  Map<String, dynamic> get driverOps => (config['driver_ops'] as Map<String, dynamic>?) ?? const {};
+  String get id => agency.id;
+  String get slug => agency.slug;
+  Map<String, String> get name => agency.name.values;
+  String get timezone => agency.timezone;
 
-  double get stopGeofenceM => (driverOps['stop_geofence_m'] as num?)?.toDouble() ?? 40.0;
-  int get pingIntervalMovingS => (driverOps['ping_interval_moving_s'] as num?)?.toInt() ?? 5;
-  int get pingIntervalIdleS => (driverOps['ping_interval_idle_s'] as num?)?.toInt() ?? 60;
-  bool get autoStartTrip => driverOps['auto_start_trip'] as bool? ?? true;
-  double get lockUiAboveKmh => (driverOps['lock_ui_above_kmh'] as num?)?.toDouble() ?? 5.0;
-
-  Map<String, dynamic> get branding => (config['branding'] as Map<String, dynamic>?) ?? const {};
+  double get stopGeofenceM => config.driverOps.stopGeofenceM.toDouble();
+  int get pingIntervalMovingS => config.driverOps.pingIntervalMovingS;
+  int get pingIntervalIdleS => config.driverOps.pingIntervalIdleS;
+  bool get autoStartTrip => config.driverOps.autoStartTrip;
+  double get lockUiAboveKmh => config.driverOps.lockUiAboveKmh.toDouble();
 
   factory AgencyInfo.fromJson(Map<String, dynamic> json) => AgencyInfo(
-        id: json['id'] as String,
-        slug: json['slug'] as String,
-        name: (json['name'] as Map<String, dynamic>?) ?? const {},
-        timezone: json['timezone'] as String? ?? 'UTC',
-        config: (json['config'] as Map<String, dynamic>?) ?? const {},
+        agency: core.Agency.fromJson(json),
+        config: core.AgencyConfig.fromJson(
+          Map<String, dynamic>.from(json['config'] as Map),
+        ),
       );
 }
