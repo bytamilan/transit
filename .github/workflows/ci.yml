@@ -97,7 +97,7 @@ jobs:
         working-directory: apps/${{ matrix.app }}
       - run: flutter analyze
         working-directory: apps/${{ matrix.app }}
-      - run: flutter test
+      - run: flutter test --exclude-tags golden
         working-directory: apps/${{ matrix.app }}
 
   compose-config:

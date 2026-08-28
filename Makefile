@@ -54,8 +54,8 @@ lint: ## Lint Go, Dart and portal code
 
 test: ## Run Go, Flutter (driver_app + rider_app) and portal suites — brief §12: "make test runs Dart, Go and portal suites"
 	cd services/api && go test -short ./...
-	cd apps/driver_app && flutter test
-	cd apps/rider_app && flutter test
+	cd apps/driver_app && flutter test --exclude-tags golden
+	cd apps/rider_app && flutter test --exclude-tags golden
 	pnpm -C apps/portal typecheck
 	pnpm -C apps/portal build
 

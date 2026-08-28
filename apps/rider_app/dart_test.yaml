@@ -1,0 +1,7 @@
+tags:
+  golden:
+    description: >-
+      Golden-image tests. Byte-for-byte PNG comparisons are sensitive to the
+      OS/rasterizer they were generated on, so these are excluded from CI
+      (`flutter test --exclude-tags golden`) and only run locally via
+      `make docs-goldens` / `flutter test test/golden/`.
