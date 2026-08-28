@@ -4,8 +4,8 @@ publish_to: 'none'
 version: 0.1.0+1
 
 environment:
-  sdk: ">=3.0.0 <4.0.0"
-  flutter: ">=3.0.0"
+  sdk: ">=3.13.0 <4.0.0"
+  flutter: ">=3.47.0"
 
 dependencies:
   flutter:
@@ -31,12 +31,29 @@ dependencies:
   permission_handler_platform_interface: ^4.4.0
   android_intent_plus: ^5.1.0
   package_info_plus: ^8.1.0
+  forui: ^0.26.0
+  hugeicons: ^1.1.7
+  material_ui: ^1.1.0
 
 dev_dependencies:
   flutter_test:
     sdk: flutter
   flutter_lints: ^4.0.0
   golden_toolkit: ^0.15.0
+  forui_cli: ^0.26.0
 
 flutter:
+  fonts:
+    - family: Atkinson Hyperlegible
+      fonts:
+        - asset: assets/fonts/Atkinson_Hyperlegible/AtkinsonHyperlegible-Regular.ttf
+          weight: 400
+        - asset: assets/fonts/Atkinson_Hyperlegible/AtkinsonHyperlegible-Bold.ttf
+          weight: 700
+        - asset: assets/fonts/Atkinson_Hyperlegible/AtkinsonHyperlegible-Italic.ttf
+          weight: 400
+          style: italic
+        - asset: assets/fonts/Atkinson_Hyperlegible/AtkinsonHyperlegible-BoldItalic.ttf
+          weight: 700
+          style: italic
   uses-material-design: true
