@@ -40,3 +40,16 @@ grep -F -- "curl" "$log_file" | grep -F -- "/healthz" >/dev/null
 grep -F -- "curl" "$log_file" | grep -F -- "/readyz" >/dev/null
 
 echo "start_backend.sh command flow passed"
+
+: > "$log_file"
+PATH="$stub_bin:$PATH" \
+START_BACKEND_TEST_LOG="$log_file" \
+"$script" --stop
+
+grep -F -- "docker compose -f deploy/compose/compose.yaml --env-file .env --profile supabase down" "$log_file" >/dev/null
+if grep -F -- "make db." "$log_file" >/dev/null; then
+	echo "--stop must not run database commands" >&2
+	exit 1
+fi
+
+echo "start_backend.sh --stop flow passed"

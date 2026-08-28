@@ -18,6 +18,29 @@ if [[ ! -f "$env_file" ]]; then
 	echo "Created .env from .env.example. Review it before using the stack outside local development."
 fi
 
+usage() {
+	echo "Usage: $0 [--stop]" >&2
+}
+
+case "${1:-}" in
+	"")
+		;;
+	--stop)
+		if [[ $# -ne 1 ]]; then
+			usage
+			exit 2
+		fi
+		command -v docker >/dev/null 2>&1 || { echo "error: docker is required" >&2; exit 1; }
+		docker compose -f "$compose_file" --env-file "$env_file" --profile supabase down
+		echo "Transit backend stopped. Database volumes were preserved."
+		exit 0
+		;;
+	*)
+		usage
+		exit 2
+		;;
+esac
+
 command -v docker >/dev/null 2>&1 || { echo "error: docker is required" >&2; exit 1; }
 command -v make >/dev/null 2>&1 || { echo "error: make is required" >&2; exit 1; }
 command -v curl >/dev/null 2>&1 || { echo "error: curl is required" >&2; exit 1; }
