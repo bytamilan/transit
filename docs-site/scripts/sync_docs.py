@@ -6,6 +6,7 @@ packages/*/README.md and internal-docs/** respectively — never edit those
 two directories directly, edit the source and re-run this script (or
 `make docs`/`make docs-serve`, which run it automatically).
 """
+import re
 import shutil
 from pathlib import Path
 
@@ -49,13 +50,15 @@ def sync_packages() -> None:
         text = readme.read_text()
         if not text.lstrip().startswith("#"):
             text = f"# {pkg_dir.name}\n\n{text}"
+        # Strip markdown links to doc/ files (only exist in source, not synced to site)
+        text = re.sub(r'\[([^\]]+)\]\(doc/[^)]+\)', r'\1', text)
         if pkg_dir.name == "transit_api_client":
             text += (
                 "\n\n!!! note\n"
                 "    This package's generated client docs "
                 "(`packages/transit_api_client/doc/*.md`) mirror "
                 "`contracts/openapi.yaml` method-by-method — see the "
-                "[API Reference](../api/index.html) for the browsable version "
+                "`docs-site/docs/api/index.html` for the browsable version "
                 "instead of reading the generated markdown directly.\n"
             )
         (packages_dst / f"{pkg_dir.name}.md").write_text(text)
