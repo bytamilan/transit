@@ -72,6 +72,7 @@ docs-serve: ## Serve the docs site locally with live reload
 docs-goldens: ## Regenerate Flutter golden screenshots and (with make dev-full + create_demo_admin.sh already run) portal Playwright screenshots
 	cd apps/rider_app && flutter test --update-goldens test/golden/
 	cd apps/driver_app && flutter test --update-goldens test/golden/
+	pnpm -C docs-site/scripts exec playwright install chromium
 	pnpm -C docs-site/scripts run shots
 
 portal.install: ## Install portal (Next.js admin console) dependencies
