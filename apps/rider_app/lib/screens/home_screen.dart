@@ -12,7 +12,10 @@ import '../utils/localized_name.dart';
 import '../widgets/alert_banner.dart';
 
 class HomeScreen extends ConsumerStatefulWidget {
-  const HomeScreen({super.key});
+  const HomeScreen({super.key, this.mapProvider});
+
+  /// Overridable for tests — defaults to the real MapLibre implementation.
+  final MapProvider? mapProvider;
 
   @override
   ConsumerState<HomeScreen> createState() => _HomeScreenState();
@@ -20,7 +23,7 @@ class HomeScreen extends ConsumerStatefulWidget {
 
 class _HomeScreenState extends ConsumerState<HomeScreen> {
   late final _api = ref.read(apiClientProvider);
-  final _map = MapLibreProvider();
+  late final _map = widget.mapProvider ?? MapLibreProvider();
   var _stops = const AsyncValue<List<Stop>>.loading();
 
   @override

@@ -2,7 +2,9 @@
 // golden test in test/golden/ imports this file instead of re-declaring
 // fixtures or a fake API client.
 import 'package:dio/dio.dart';
+import 'package:flutter/material.dart';
 import 'package:transit_api_client/transit_api_client.dart';
+import 'package:transit_maps/transit_maps.dart';
 
 import 'package:rider_app/models/app_state.dart';
 import 'package:rider_app/providers/agency_provider.dart';
@@ -181,4 +183,25 @@ class FakeDefaultApi extends DefaultApi {
     ProgressCallback? onReceiveProgress,
   }) async =>
       _ok(StopTimeList((b) => b..items.addAll(stopTimes)));
+}
+
+/// A deterministic stand-in for [MapLibreProvider] in golden tests — avoids
+/// the real MapLibreMap platform view, which doesn't render reliably in a
+/// headless flutter test.
+class FakeMapProvider implements MapProvider {
+  @override
+  Widget buildMap({
+    required double initialLat,
+    required double initialLon,
+    required double zoom,
+    required List<MapMarker> markers,
+    required List<MapPolyline> polylines,
+    required void Function(double lat, double lon)? onTap,
+  }) {
+    return Container(
+      color: const Color(0xFFE0E0E0),
+      alignment: Alignment.center,
+      child: Text('Map (${markers.length} stops)'),
+    );
+  }
 }
