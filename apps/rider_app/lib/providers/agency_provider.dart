@@ -1,6 +1,5 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:transit_api_client/transit_api_client.dart';
-import 'package:transit_core/transit_core.dart' as core;
 import '../models/app_state.dart';
 import 'api_provider.dart';
 
@@ -24,9 +23,7 @@ class AgencyNotifier extends StateNotifier<AppState> {
         loading: false,
       );
     } catch (error) {
-      final failure = error is core.TransitException
-          ? error.failure
-          : core.ValidationFailure(error.toString());
+      final failure = failureFrom(error);
       state = state.copyWith(loading: false, error: failure);
     }
   }

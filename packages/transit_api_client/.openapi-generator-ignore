@@ -21,3 +21,9 @@
 #docs/*.md
 # Then explicitly reverse the ignore rule for a single file:
 #!docs/README.md
+
+# Hand-owned package integration files.
+lib/transit_api_client.dart
+lib/src/domain_mappers.dart
+lib/src/failure_mapper.dart
+pubspec.yaml

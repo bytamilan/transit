@@ -1,8 +1,14 @@
 import 'package:transit_core/transit_core.dart';
 
 import 'map_provider.dart';
+import 'map_view.dart';
 
 class MapProviderResolver {
+  const MapProviderResolver.defaults()
+      : mapLibre = const MapLibreProvider(),
+        protomaps = const ProtomapsProvider(),
+        google = null;
+
   const MapProviderResolver({
     required this.mapLibre,
     this.protomaps,

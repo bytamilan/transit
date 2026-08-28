@@ -2,11 +2,13 @@ import '../failures/failure.dart';
 
 final class GeoPoint {
   GeoPoint({required this.latitude, required this.longitude}) {
-    if (latitude < -90 || latitude > 90) {
-      throw const ValidationFailure('Latitude must be between -90 and 90');
+    if (!latitude.isFinite || latitude < -90 || latitude > 90) {
+      throw ValidationFailure('Latitude must be finite and between -90 and 90');
     }
-    if (longitude < -180 || longitude > 180) {
-      throw const ValidationFailure('Longitude must be between -180 and 180');
+    if (!longitude.isFinite || longitude < -180 || longitude > 180) {
+      throw ValidationFailure(
+        'Longitude must be finite and between -180 and 180',
+      );
     }
   }
 

@@ -20,15 +20,12 @@ class RouteScreen extends ConsumerStatefulWidget {
 
 class _RouteScreenState extends ConsumerState<RouteScreen> {
   static const _defaultCamera = (lat: 1.2966, lon: 103.7764);
-  static const _mapProviderResolver = MapProviderResolver(
-    mapLibre: MapLibreProvider(),
-    protomaps: MapLibreProvider(),
-  );
+  static const _mapProviderResolver = MapProviderResolver.defaults();
 
   late final _api = ref.read(apiClientProvider);
-  var _trips = const AsyncValue<List<Trip>>.loading();
+  var _trips = const AsyncValue<List<core.Trip>>.loading();
   var _selectedTripId = '';
-  var _stopTimes = const AsyncValue<List<StopTime>>.loading();
+  var _stopTimes = const AsyncValue<List<core.StopTime>>.loading();
 
   @override
   void initState() {
@@ -40,7 +37,7 @@ class _RouteScreenState extends ConsumerState<RouteScreen> {
     _trips = await AsyncValue.guard(() async {
       final response =
           await _api.listTrips(slug: widget.slug, routeId: widget.routeId);
-      return response.data?.items.toList() ?? [];
+      return response.data?.items.map((trip) => trip.toDomain()).toList() ?? [];
     });
     if (mounted) {
       setState(() {});
@@ -55,7 +52,10 @@ class _RouteScreenState extends ConsumerState<RouteScreen> {
     _stopTimes = await AsyncValue.guard(() async {
       final response =
           await _api.listTripStopTimes(slug: widget.slug, tripId: tripId);
-      return response.data?.items.toList() ?? [];
+      return response.data?.items
+              .map((stopTime) => stopTime.toDomain())
+              .toList() ??
+          [];
     });
     if (mounted) setState(() {});
   }

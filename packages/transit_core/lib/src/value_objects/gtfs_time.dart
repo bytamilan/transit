@@ -39,6 +39,6 @@ final class GtfsTime implements Comparable<GtfsTime> {
     final hours = totalSeconds ~/ Duration.secondsPerHour;
     final minutes = (totalSeconds % Duration.secondsPerHour) ~/ 60;
     final seconds = totalSeconds % 60;
-    return '$hours:${minutes.toString().padLeft(2, '0')}:${seconds.toString().padLeft(2, '0')}';
+    return '${hours.toString().padLeft(2, '0')}:${minutes.toString().padLeft(2, '0')}:${seconds.toString().padLeft(2, '0')}';
   }
 }

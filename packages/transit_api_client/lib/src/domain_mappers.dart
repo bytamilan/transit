@@ -143,10 +143,13 @@ T _map<T>(T Function() convert) {
   } on core.ValidationFailure catch (error) {
     throw core.TransitException(error);
   } on FormatException catch (error) {
-    throw core.TransitException(core.ValidationFailure(error.message));
+    throw core.TransitException(
+        core.ParsingFailure(error.message, cause: error));
   } on ArgumentError catch (error) {
-    throw core.TransitException(core.ValidationFailure(error.toString()));
+    throw core.TransitException(
+        core.ValidationFailure(error.toString(), cause: error));
   } on TypeError catch (error) {
-    throw core.TransitException(core.ValidationFailure(error.toString()));
+    throw core.TransitException(
+        core.ParsingFailure(error.toString(), cause: error));
   }
 }

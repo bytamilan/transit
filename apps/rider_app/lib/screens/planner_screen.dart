@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:transit_api_client/transit_api_client.dart';
+import 'package:transit_core/transit_core.dart' as core;
 import '../models/itinerary.dart';
 import '../providers/api_provider.dart';
 import '../providers/extra_api.dart';
@@ -19,7 +20,7 @@ class _PlannerScreenState extends ConsumerState<PlannerScreen> {
   late final _api = ref.read(apiClientProvider);
   late final _extra = ref.read(extraApiProvider);
 
-  var _stops = const AsyncValue<List<Stop>>.loading();
+  var _stops = const AsyncValue<List<core.Stop>>.loading();
   String? _originStopId;
   bool _useMyLocation = false;
   String? _destinationStopId;
@@ -36,7 +37,7 @@ class _PlannerScreenState extends ConsumerState<PlannerScreen> {
   Future<void> _loadStops() async {
     _stops = await AsyncValue.guard(() async {
       final response = await _api.listStops(slug: widget.slug);
-      return response.data?.items.toList() ?? [];
+      return response.data?.items.map((stop) => stop.toDomain()).toList() ?? [];
     });
     if (mounted) setState(() {});
   }
@@ -61,7 +62,8 @@ class _PlannerScreenState extends ConsumerState<PlannerScreen> {
         lat = pos.latitude;
         lon = pos.longitude;
       } catch (e) {
-        setState(() => _itineraries = AsyncValue.error('Could not get your location: $e', StackTrace.current));
+        setState(() => _itineraries = AsyncValue.error(
+            'Could not get your location: $e', StackTrace.current));
         return;
       }
     }
@@ -102,7 +104,8 @@ class _PlannerScreenState extends ConsumerState<PlannerScreen> {
                       decoration: const InputDecoration(labelText: 'From stop'),
                       value: _originStopId,
                       items: stops
-                          .map((s) => DropdownMenuItem(value: s.stopId, child: Text(s.stopName)))
+                          .map((s) => DropdownMenuItem(
+                              value: s.stopId, child: Text(s.stopName)))
                           .toList(),
                       onChanged: (v) => setState(() => _originStopId = v),
                     ),
@@ -111,12 +114,14 @@ class _PlannerScreenState extends ConsumerState<PlannerScreen> {
                     decoration: const InputDecoration(labelText: 'To stop'),
                     value: _destinationStopId,
                     items: stops
-                        .map((s) => DropdownMenuItem(value: s.stopId, child: Text(s.stopName)))
+                        .map((s) => DropdownMenuItem(
+                            value: s.stopId, child: Text(s.stopName)))
                         .toList(),
                     onChanged: (v) => setState(() => _destinationStopId = v),
                   ),
                   const SizedBox(height: 16),
-                  ElevatedButton(onPressed: _plan, child: const Text('Find itineraries')),
+                  ElevatedButton(
+                      onPressed: _plan, child: const Text('Find itineraries')),
                 ],
               ),
               loading: () => const Center(child: CircularProgressIndicator()),
@@ -127,13 +132,16 @@ class _PlannerScreenState extends ConsumerState<PlannerScreen> {
               Expanded(
                 child: _itineraries.when(
                   data: (itins) => itins.isEmpty
-                      ? const Center(child: Text('No itineraries found for this trip.'))
+                      ? const Center(
+                          child: Text('No itineraries found for this trip.'))
                       : ListView.separated(
                           itemCount: itins.length,
                           separatorBuilder: (_, __) => const Divider(),
-                          itemBuilder: (context, index) => _ItineraryTile(itinerary: itins[index]),
+                          itemBuilder: (context, index) =>
+                              _ItineraryTile(itinerary: itins[index]),
                         ),
-                  loading: () => const Center(child: CircularProgressIndicator()),
+                  loading: () =>
+                      const Center(child: CircularProgressIndicator()),
                   error: (e, _) => Center(child: Text('$e')),
                 ),
               ),
@@ -148,13 +156,15 @@ class _ItineraryTile extends StatelessWidget {
   final Itinerary itinerary;
   const _ItineraryTile({required this.itinerary});
 
-  String _fmt(DateTime t) => '${t.hour.toString().padLeft(2, '0')}:${t.minute.toString().padLeft(2, '0')}';
+  String _fmt(DateTime t) =>
+      '${t.hour.toString().padLeft(2, '0')}:${t.minute.toString().padLeft(2, '0')}';
 
   @override
   Widget build(BuildContext context) {
     final duration = Duration(seconds: itinerary.durationSeconds);
     return ListTile(
-      title: Text('${_fmt(itinerary.departureTime)} → ${_fmt(itinerary.arrivalTime)}'
+      title: Text(
+          '${_fmt(itinerary.departureTime)} → ${_fmt(itinerary.arrivalTime)}'
           ' (${duration.inMinutes} min, ${itinerary.transfers} transfer${itinerary.transfers == 1 ? '' : 's'})'),
       subtitle: Column(
         crossAxisAlignment: CrossAxisAlignment.start,

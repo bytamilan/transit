@@ -13,18 +13,27 @@ void main() {
   });
 
   group('LocalizedText', () {
-    test('pick prefers Tamil, then English, then sorted first locale', () {
+    test('pick uses the requested locale before English', () {
       expect(
         LocalizedText({'en': 'English', 'ta': 'Tamil', 'zh': 'Chinese'})
             .pick('ta'),
         'Tamil',
       );
+    });
+
+    test('pick uses English for an unsupported locale even when Tamil exists',
+        () {
       expect(
-        LocalizedText({'en': 'English', 'zh': 'Chinese'}).pick('ta'),
+        LocalizedText({'ta': 'Tamil', 'en': 'English', 'zh': 'Chinese'})
+            .pick('fr'),
         'English',
       );
+    });
+
+    test('pick uses the sorted first locale when requested and English miss',
+        () {
       expect(
-        LocalizedText({'zh': 'Chinese', 'de': 'German'}).pick('ta'),
+        LocalizedText({'zh': 'Chinese', 'de': 'German'}).pick('fr'),
         'German',
       );
     });
@@ -66,6 +75,29 @@ void main() {
         () => GeoPoint(latitude: 0, longitude: 181),
         throwsA(isA<ValidationFailure>()),
       );
+    });
+
+    test('rejects non-finite latitude and longitude values', () {
+      for (final latitude in [
+        double.nan,
+        double.infinity,
+        double.negativeInfinity
+      ]) {
+        expect(
+          () => GeoPoint(latitude: latitude, longitude: 0),
+          throwsA(isA<ValidationFailure>()),
+        );
+      }
+      for (final longitude in [
+        double.nan,
+        double.infinity,
+        double.negativeInfinity
+      ]) {
+        expect(
+          () => GeoPoint(latitude: 0, longitude: longitude),
+          throwsA(isA<ValidationFailure>()),
+        );
+      }
     });
   });
 }

@@ -9,6 +9,7 @@ export 'package:transit_api_client/src/auth/bearer_auth.dart';
 export 'package:transit_api_client/src/auth/oauth.dart';
 export 'package:transit_api_client/src/serializers.dart';
 export 'package:transit_api_client/src/domain_mappers.dart';
+export 'package:transit_api_client/src/failure_mapper.dart';
 export 'package:transit_api_client/src/model/date.dart';
 
 export 'package:transit_api_client/src/api/default_api.dart';

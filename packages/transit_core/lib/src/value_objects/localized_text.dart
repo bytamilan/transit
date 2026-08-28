@@ -13,7 +13,6 @@ final class LocalizedText {
   String pick([String? locale]) {
     final candidates = <String>[
       if (locale != null) locale,
-      'ta',
       'en',
     ];
     for (final candidate in candidates) {

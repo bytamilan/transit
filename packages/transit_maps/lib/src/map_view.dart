@@ -17,25 +17,10 @@ class MapLibreProvider implements MapProvider {
     Future<void> addAnnotations() async {
       final mapController = controller;
       if (mapController == null) return;
-      for (final marker in options.markers) {
-        await mapController.addSymbol(SymbolOptions(
-          geometry: LatLng(marker.lat, marker.lon),
-          iconImage: 'marker-15',
-          iconColor: marker.color == null ? null : _hexColor(marker.color!),
-          textField: marker.label,
-          textOffset: const Offset(0, 1.5),
-        ));
-      }
-      for (final polyline in options.polylines) {
-        await mapController.addLine(LineOptions(
-          geometry: polyline.points
-              .map((point) => LatLng(point.lat, point.lon))
-              .toList(growable: false),
-          lineColor: _hexColor(polyline.color),
-          lineOpacity: polyline.color.a,
-          lineWidth: polyline.width,
-        ));
-      }
+      await MapLibreAnnotationForwarder().forward(
+        _MapLibreControllerSink(mapController),
+        options,
+      );
     }
 
     return MapLibreMap(
@@ -46,10 +31,70 @@ class MapLibreProvider implements MapProvider {
       ),
       onMapCreated: (createdController) => controller = createdController,
       onStyleLoadedCallback: addAnnotations,
-      onMapClick: (_, latLng) =>
-          options.onMapClick?.call(latLng.latitude, latLng.longitude),
+      onMapClick: (_, latLng) => forwardMapClick(options, latLng),
     );
   }
+}
+
+/// Testable boundary for forwarding provider-neutral map primitives to
+/// MapLibre annotations.
+abstract interface class MapLibreAnnotationSink {
+  Future<void> addMarker(MapMarker marker);
+  Future<void> addPolyline(MapPolyline polyline);
+}
+
+class MapLibreAnnotationForwarder {
+  Future<void> forward(
+    MapLibreAnnotationSink sink,
+    MapViewOptions options,
+  ) async {
+    for (final marker in options.markers) {
+      await sink.addMarker(marker);
+    }
+    for (final polyline in options.polylines) {
+      await sink.addPolyline(polyline);
+    }
+  }
+}
+
+void forwardMapClick(MapViewOptions options, LatLng latLng) {
+  options.onMapClick?.call(latLng.latitude, latLng.longitude);
+}
+
+class _MapLibreControllerSink implements MapLibreAnnotationSink {
+  _MapLibreControllerSink(this._controller);
+
+  final MapLibreMapController _controller;
+
+  @override
+  Future<void> addMarker(MapMarker marker) => _controller.addSymbol(
+        SymbolOptions(
+          geometry: LatLng(marker.lat, marker.lon),
+          iconImage: 'marker-15',
+          iconColor: marker.color == null ? null : _hexColor(marker.color!),
+          textField: marker.label,
+          textOffset: const Offset(0, 1.5),
+        ),
+      );
+
+  @override
+  Future<void> addPolyline(MapPolyline polyline) => _controller.addLine(
+        LineOptions(
+          geometry: polyline.points
+              .map((point) => LatLng(point.lat, point.lon))
+              .toList(growable: false),
+          lineColor: _hexColor(polyline.color),
+          lineOpacity: polyline.color.a,
+          lineWidth: polyline.width,
+        ),
+      );
+}
+
+/// Protomaps tiles rendered through MapLibre with a distinct production style.
+class ProtomapsProvider extends MapLibreProvider {
+  const ProtomapsProvider({
+    super.styleUrl = 'https://api.protomaps.com/styles/v2/light.json',
+  });
 }
 
 String _hexColor(Color color) =>

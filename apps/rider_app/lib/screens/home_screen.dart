@@ -24,13 +24,10 @@ class HomeScreen extends ConsumerStatefulWidget {
 
 class _HomeScreenState extends ConsumerState<HomeScreen> {
   static const _defaultCamera = (lat: 1.2966, lon: 103.7764);
-  static const _mapProviderResolver = MapProviderResolver(
-    mapLibre: MapLibreProvider(),
-    protomaps: MapLibreProvider(),
-  );
+  static const _mapProviderResolver = MapProviderResolver.defaults();
 
   late final _api = ref.read(apiClientProvider);
-  var _stops = const AsyncValue<List<Stop>>.loading();
+  var _stops = const AsyncValue<List<core.Stop>>.loading();
 
   @override
   void initState() {
@@ -43,7 +40,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     if (slug == null) return;
     _stops = await AsyncValue.guard(() async {
       final response = await _api.listStops(slug: slug);
-      return response.data?.items.toList() ?? [];
+      return response.data?.items.map((stop) => stop.toDomain()).toList() ?? [];
     });
     if (mounted) setState(() {});
   }
@@ -94,8 +91,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                 zoom: 13,
                 markers: _stops.valueOrNull
                         ?.map((s) => MapMarker(
-                              lat: s.stopLat ?? 0,
-                              lon: s.stopLon ?? 0,
+                              lat: s.coordinates?.latitude ?? 0,
+                              lon: s.coordinates?.longitude ?? 0,
                               label: s.stopName,
                             ))
                         .toList() ??
