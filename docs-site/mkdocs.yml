@@ -35,6 +35,7 @@ nav:
   - Apps:
       - Rider app: apps/rider_app.md
       - Driver app: apps/driver_app.md
+      - Portal: apps/portal.md
   - Packages:
       - transit_core: packages/transit_core.md
       - transit_api_client: packages/transit_api_client.md
