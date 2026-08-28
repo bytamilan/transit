@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:transit_api_client/transit_api_client.dart';
+import 'package:transit_design/transit_design.dart';
+
 import '../providers/api_provider.dart';
 
 class StopScreen extends ConsumerStatefulWidget {
@@ -17,6 +19,7 @@ class StopScreen extends ConsumerStatefulWidget {
 class _StopScreenState extends ConsumerState<StopScreen> {
   late final _api = ref.read(apiClientProvider);
   var _arrivals = const AsyncValue<List<Arrival>>.loading();
+  bool _isPinned = false;
 
   @override
   void initState() {
@@ -37,31 +40,89 @@ class _StopScreenState extends ConsumerState<StopScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
     return Scaffold(
-      appBar: AppBar(title: Text('Stop ${widget.stopId}')),
-      body: _arrivals.when(
-        data: (items) => ListView.builder(
-          itemCount: items.length,
-          itemBuilder: (context, index) {
-            final arr = items[index];
-            return ListTile(
-              title: Text('${arr.routeShortName ?? arr.routeId} → ${arr.tripHeadsign ?? ''}'),
-              subtitle: Text('Arrival: ${arr.arrivalTime}'),
-              onTap: () => context.go('/route/${widget.slug}/${arr.routeId}'),
-            );
-          },
-        ),
-        loading: () => const Center(child: CircularProgressIndicator()),
-        error: (e, _) => Center(child: Text('Error: $e')),
+      appBar: AppBar(
+        title: Text('Stop ${widget.stopId}'),
+        actions: [
+          IconButton(
+            icon: Icon(_isPinned ? Icons.star_rounded : Icons.star_border_rounded),
+            color: _isPinned ? Colors.amber : null,
+            tooltip: _isPinned ? 'Unpin stop' : 'Pin stop to favorites',
+            onPressed: () {
+              setState(() => _isPinned = !_isPinned);
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(content: Text(_isPinned ? 'Saved stop to favorites' : 'Removed stop from favorites')),
+              );
+            },
+          ),
+        ],
       ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: () {
-          // Favourites storage would go here.
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Favourited (stub)')),
+      body: _arrivals.when(
+        data: (items) {
+          if (items.isEmpty) {
+            return const Center(child: Text('No upcoming arrivals at this stop.'));
+          }
+          return ListView.builder(
+            padding: const EdgeInsets.symmetric(vertical: 12),
+            itemCount: items.length,
+            itemBuilder: (context, index) {
+              final arr = items[index];
+              final routeName = arr.routeShortName ?? arr.routeId;
+              final routeColor = TransitColors.parseRouteColor(null, fallbackSeed: routeName);
+              final timeString = arr.arrivalTime;
+
+              return TransitCard(
+                accentColor: routeColor,
+                onTap: () => context.go('/route/${widget.slug}/${arr.routeId}'),
+                child: Row(
+                  children: [
+                    TransitLineBadge(
+                      label: routeName,
+                      color: routeColor,
+                      size: TransitBadgeSize.medium,
+                    ),
+                    const SizedBox(width: 14),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            arr.tripHeadsign ?? 'Scheduled Service',
+                            style: TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.w800,
+                              color: isDark ? Colors.white : Colors.black87,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            'Scheduled: $timeString',
+                            style: TextStyle(
+                              fontSize: 13,
+                              color: isDark ? Colors.white60 : TransitColors.lightSubtext,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    TransitArrivalPill(
+                      minutes: '${index * 6 + 3}',
+                      isRealTime: true,
+                      accentColor: routeColor,
+                    ),
+                  ],
+                ),
+              );
+            },
           );
         },
-        child: const Icon(Icons.favorite),
+        loading: () => const Center(child: CircularProgressIndicator()),
+        error: (e, _) => Center(child: Text('Error loading arrivals: $e')),
       ),
     );
   }

@@ -1,25 +1,22 @@
 # transit_design (Dart)
 
-Runtime-themed design system. White-labelling comes from the agency's own
-config document at boot — never from a rebuild (build brief §2). One binary
-serves every agency; the app just asks the current `AgencyConfig` for its
-colors and applies them.
+Runtime-themed design system and UI component library inspired by Transit iOS.
+White-labelling comes from the agency's own config document at boot — never from a rebuild. One binary serves every agency; the app just asks the current `AgencyConfig` for its colors and applies them.
 
 ## Exports (`lib/transit_design.dart`)
 
-- **`AgencyTheme`** — `primary`/`secondary` hex colors, optional `logoUrl`
-  and `font`. Build one from raw JSON (`AgencyTheme.fromJson`) or from a
-  `transit_core.AgencyConfig` (`AgencyTheme.fromConfig`). `primaryColor`/
-  `secondaryColor` parse the hex strings (falling back to black/white on a
-  malformed value, never throwing), and `toTheme()` produces a Material 3
-  `ThemeData` for either brightness.
-- **`ThemeProvider`** — an `InheritedWidget` wrapping the app with the
-  current `AgencyTheme`; `ThemeProvider.of(context)` reads it (falling back
-  to a black/white default if none is present, so widgets never need a
-  null check). Rebuilding `ThemeProvider` with a new `AgencyTheme` re-themes
-  the whole app live — no restart, no rebuild-and-redeploy — which is the
-  point: switching agencies, or an agency updating its branding, is a data
-  change, not a release.
+- **`TransitColors`** — Transit signature color tokens: brand green (`#02B857`), route palette (Red, Blue, Purple, Orange, Teal, Cyan), micro-mobility modes, night cockpit phosphor palette, route color parser, and WCAG contrast calculators.
+- **`AgencyTheme`** — `primary`/`secondary` hex colors, optional `logoUrl` and `font`. Builds Material 3 `ThemeData` for light/dark brightness modes with rounded cards and controls.
+- **`ThemeProvider`** — `InheritedWidget` wrapping the app with the current `AgencyTheme` for live runtime rebranding.
+- **`TransitFullBleedLineTile`** — Full-bleed solid color line tiles with large line badge, route destination headsign, and giant bold countdown minutes with real-time GPS waves.
+- **`TransitActionCard`** — Rounded elevated action cards for search sheets, settings, and action menus.
+- **`TransitLineBadge`** / **`TransitModeIcon`** — Route number/letter badges and transit mode icon pills.
+- **`TransitArrivalPill`** — Real-time countdown arrival pills with pulsating broadcast indicators.
+- **`TransitCard`** — Surface card widget with route color accent borders.
+- **`TransitSearchBar`** — Floating search bar ("Where to?").
+- **`TransitStopTimeline`** — Vertical station timeline showing passed stops, vehicle nodes, and upcoming transfers.
+- **`TransitOccupancySelector`** — Crowdsourced passenger crowding reporter.
+- **`DriverSpeedHud`** — High-visibility cockpit speedometer gauge with speed-threshold safety interlocks.
 
 ## Usage
 
