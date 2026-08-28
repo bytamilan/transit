@@ -25,9 +25,9 @@ output serialises out of it.
   all 13 phases broken into tasks, deliverables, gates, dependencies, risks
   and milestones.
 - The full documentation site (features, app screenshots, package
-  references, API reference, wiki) is published from `docs-site/` via
-  GitHub Pages — see `docs-site/README_LINK` below, or run `make docs-serve`
-  for a local copy.
+  references, API reference, wiki) is published at
+  https://bytamilan.github.io/transit/ via GitHub Pages — see `docs-site/`
+  in this repo, or run `make docs-serve` for a local copy.
 
 ## Stack
 
