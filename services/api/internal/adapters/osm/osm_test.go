@@ -83,10 +83,10 @@ func TestBuildBusStopQuery(t *testing.T) {
 
 func TestBuildBusStopQuery_Validation(t *testing.T) {
 	cases := map[string][4]float64{
-		"zero area":   {1.2, 103.7, 1.2, 103.9},
-		"inverted":    {1.4, 103.7, 1.2, 103.9},
-		"too tall":    {1.2, 103.7, 1.2 + MaxBBoxSpanDegrees + 0.01, 103.9},
-		"too wide":    {1.2, 103.7, 1.4, 103.7 + MaxBBoxSpanDegrees + 0.01},
+		"zero area": {1.2, 103.7, 1.2, 103.9},
+		"inverted":  {1.4, 103.7, 1.2, 103.9},
+		"too tall":  {1.2, 103.7, 1.2 + MaxBBoxSpanDegrees + 0.01, 103.9},
+		"too wide":  {1.2, 103.7, 1.4, 103.7 + MaxBBoxSpanDegrees + 0.01},
 	}
 	for name, c := range cases {
 		if _, err := BuildBusStopQuery(c[0], c[1], c[2], c[3]); err == nil {

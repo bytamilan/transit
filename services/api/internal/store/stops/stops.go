@@ -36,12 +36,12 @@ type Stop struct {
 
 // Params controls listing.
 type Params struct {
-	AgencyID  uuid.UUID
-	Lat       *float64
-	Lon       *float64
-	RadiusM   *float64
-	Limit     int
-	Offset    int
+	AgencyID uuid.UUID
+	Lat      *float64
+	Lon      *float64
+	RadiusM  *float64
+	Limit    int
+	Offset   int
 }
 
 // List returns stops for an agency, optionally filtered by distance.
