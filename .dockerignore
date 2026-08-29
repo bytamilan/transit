@@ -1,0 +1,13 @@
+.git
+.gitignore
+**/node_modules
+**/.next
+**/.dart_tool
+**/build
+**/.env
+**/.env.*
+!**/.env.example
+services/api/bin
+services/api/server
+docs-site/site
+*.log

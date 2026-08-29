@@ -123,6 +123,37 @@ services:
         condition: service_healthy
     restart: on-failure
 
+  # Phase 4/6/9: public data portal and agency admin console. The image is
+  # built from the monorepo root because the portal is a pnpm workspace member.
+  # `make dev` and `make dev-full` both use `up --build`, so the portal image
+  # is rebuilt every time either local stack is started.
+  portal:
+    build:
+      context: ../..
+      dockerfile: apps/portal/Dockerfile
+      args:
+        NEXT_PUBLIC_API_BASE_URL: ${PORTAL_API_BASE_URL:-http://localhost:8080}
+        NEXT_PUBLIC_EXPORTER_BASE_URL: ${PORTAL_EXPORTER_BASE_URL:-http://localhost:8090}
+        NEXT_PUBLIC_SUPABASE_URL: ${PORTAL_SUPABASE_URL:-http://localhost:8080/auth}
+        NEXT_PUBLIC_SUPABASE_ANON_KEY: ${SUPABASE_ANON_KEY:-}
+        NEXT_PUBLIC_MAP_STYLE_URL: ${PORTAL_MAP_STYLE_URL:-https://demotiles.maplibre.org/style.json}
+    environment:
+      NODE_ENV: production
+      PORT: "3000"
+      NEXT_PUBLIC_API_BASE_URL: ${PORTAL_API_BASE_URL:-http://localhost:8080}
+      NEXT_PUBLIC_EXPORTER_BASE_URL: ${PORTAL_EXPORTER_BASE_URL:-http://localhost:8090}
+      NEXT_PUBLIC_SUPABASE_URL: ${PORTAL_SUPABASE_URL:-http://localhost:8080/auth}
+      NEXT_PUBLIC_SUPABASE_ANON_KEY: ${SUPABASE_ANON_KEY:-}
+      NEXT_PUBLIC_MAP_STYLE_URL: ${PORTAL_MAP_STYLE_URL:-https://demotiles.maplibre.org/style.json}
+    ports:
+      - "${PORTAL_PORT:-3002}:3000"
+    depends_on:
+      api:
+        condition: service_started
+      exporter:
+        condition: service_started
+    restart: on-failure
+
   # Supabase Auth (GoTrue) — the JWT issuer used by the Flutter apps and portal.
   # Wired to the same Postgres instance; a full custom-claims hook lands in Phase 2.
   auth:

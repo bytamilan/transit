@@ -33,5 +33,10 @@ make portal.install
 make portal.dev              # http://localhost:3000
 ```
 
+The portal is also included in the local Docker Compose stack. Start it with
+`make dev` or `make dev-full`; those commands rebuild the portal image on every
+stack startup and serve it at `http://localhost:3002` by default. Set
+`PORTAL_PORT` in the root `.env` to use a different host port.
+
 `make portal.build` type-checks and production-builds the app (also run in
 CI via `make lint`/`make test` equivalents for the portal).
